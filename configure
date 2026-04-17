@@ -1,0 +1,102 @@
+#!/bin/bash
+
+# If installing within conda build ignore configure
+[[ ! -z "$CONDA_BUILD" ]] && exit 0
+
+if [[ -z "$(which cget)" ]]; then
+  (>&2 echo "cget must be installed to build SAIGE-QTL. Run 'pip install cget' or 'conda install -c conda-forge cget'.")
+  exit 1
+fi
+
+set -eu
+
+echo "Installing C++ dependencies with cget..."
+
+# Clean and install cget-managed dependencies (savvy, superlu)
+rm -rf thirdParty/cget
+cget ignore --prefix thirdParty/cget xz
+cget install -DCMAKE_C_FLAGS="-fPIC" -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 --prefix thirdParty/cget -f thirdParty/requirements.txt
+
+echo "Installing plink-ng separately..."
+
+# Check for required headers
+if [[ ! -z "${CONDA_PREFIX:-}" ]]; then
+    if [[ ! -f "${CONDA_PREFIX}/include/zlib.h" ]]; then
+        echo "Warning: zlib.h not found in conda environment."
+        echo "You may need to install zlib development headers:"
+        echo "  conda install zlib"
+        echo "or:"
+        echo "  conda install -c conda-forge zlib"
+    fi
+fi
+
+# Download and install plink-ng manually (since it doesn't use CMake)
+cd thirdParty
+if [ ! -d "plink-ng" ]; then
+    curl -L https://github.com/chrchang/plink-ng/archive/refs/tags/v2.0.0-a.6.16.tar.gz | tar -zx
+    mv plink-ng-2.0.0-a.6.16 plink-ng
+fi
+
+echo "Creating plink2_includes.a..."
+
+# Detect appropriate C++ compiler and standard
+CXX="g++"
+CXX_STD=""
+INCLUDE_FLAGS=""
+LIBRARY_FLAGS=""
+
+# Try to use conda environment compiler if available
+if [[ ! -z "${CONDA_PREFIX:-}" ]]; then
+    if command -v "${CONDA_PREFIX}/bin/g++" >/dev/null 2>&1; then
+        CXX="${CONDA_PREFIX}/bin/g++"
+        echo "Using conda g++: $CXX"
+    elif command -v "${CONDA_PREFIX}/bin/x86_64-conda-linux-gnu-c++" >/dev/null 2>&1; then
+        CXX="${CONDA_PREFIX}/bin/x86_64-conda-linux-gnu-c++"
+        echo "Using conda cross-compiler: $CXX"
+    fi
+    
+    # Add conda include and library paths
+    INCLUDE_FLAGS="-I${CONDA_PREFIX}/include"
+    LIBRARY_FLAGS="-L${CONDA_PREFIX}/lib"
+    echo "Using conda include path: ${CONDA_PREFIX}/include"
+    echo "Using conda library path: ${CONDA_PREFIX}/lib"
+fi
+
+# Detect appropriate C++ standard
+if $CXX -std=c++14 -x c++ -c /dev/null -o /dev/null 2>/dev/null; then
+    CXX_STD="-std=c++14"
+elif $CXX -std=c++11 -x c++ -c /dev/null -o /dev/null 2>/dev/null; then
+    CXX_STD="-std=c++11"
+elif $CXX -std=c++0x -x c++ -c /dev/null -o /dev/null 2>/dev/null; then
+    CXX_STD="-std=c++0x"
+else
+    echo "Warning: Could not detect C++11/14 support, using default"
+    CXX_STD=""
+fi
+
+echo "Using compiler: $CXX"
+echo "Using C++ standard: ${CXX_STD:-default}"
+
+# Create plink2_includes.a from plink-ng source
+cd plink-ng
+find . -name "*.cc" -path "*/2.0/include/*" -exec $CXX $CXX_STD $INCLUDE_FLAGS -fPIC -O3 -c {} \;
+ar rcs plink2_includes.a *.o
+
+# Ensure the lib directory exists before copying
+mkdir -p ../cget/lib
+
+cp plink2_includes.a ../cget/lib/
+
+# Copy headers
+mkdir -p ../cget/include/plink-ng
+find . -name "*.h" -path "*/2.0/include/*" -exec cp {} ../cget/include/plink-ng/ \; 2>/dev/null || true
+find . -name "*.hpp" -path "*/2.0/include/*" -exec cp {} ../cget/include/plink-ng/ \; 2>/dev/null || true
+
+cd ../..
+
+echo "C++ dependencies installed successfully in thirdParty/cget/"
+echo ""
+echo "Installed libraries:"
+ls -la thirdParty/cget/lib/
+echo ""
+echo "You can now run: R CMD INSTALL ."

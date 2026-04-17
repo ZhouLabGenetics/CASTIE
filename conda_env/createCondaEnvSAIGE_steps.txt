@@ -1,0 +1,29 @@
+# Create SAIGE-QTL Dynamic conda environment (updated to match Dockerfile)
+
+# Step 1: Create base environment with R and Python
+conda create -n RSAIGE r-base>=4.0 python=3.10 -c conda-forge -c r
+
+# Step 2: Activate environment
+conda activate RSAIGE
+
+# Step 3: Install build tools and system dependencies
+conda install -c conda-forge cmake make git gcc_linux-64 gxx_linux-64 gfortran_linux-64 libopenblas tbb-devel
+
+# Step 4: Install core R packages
+conda install -c conda-forge -c r r-recommended r-rcpp r-rcppparallel r-rcpparmadillo r-rcppeigen r-rcppnumerical r-bh r-matrix r-data.table r-optparse r-mass r-nlme
+
+# Step 5: Install statistical packages
+conda install -c conda-forge -c r r-skat r-rhpcblasctl r-rsqlite r-spatest
+
+# Step 6: Install development packages
+conda install -c conda-forge -c r r-remotes r-devtools r-r.utils r-lintools
+
+# Step 7: Install Python tools for C++ dependency management
+pip install cget
+
+# Step 8: Install GitHub packages using R
+R -e "remotes::install_github('leeshawn/MetaSKAT', dependencies=TRUE)"
+R -e "remotes::install_github('cysouw/qlcMatrix', dependencies=TRUE)"
+
+# Optional: Export environment for sharing
+conda env export > environment-RSAIGE.yml

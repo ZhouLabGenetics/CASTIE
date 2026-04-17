@@ -1,0 +1,19 @@
+Package: SAIGEQTL
+Type: Package
+Title: scalable and accurate expression quantitative trait locus mapping for single-cell studies
+Version: 0.2.5.3
+Date: 2026-1-5
+Author: Christiana Liu, Linfeng Hu, Anna Cuomo, Wei Zhou
+Maintainer: Wei Zhou <wzhou@broadinstitute.org> 
+Description:an R package that implements the Scalable and Accurate Implementation of Generalized Poisson mixed model for eQTL mapping at the single-cell level.  
+License: GPL (>= 2)
+Imports: Rcpp (>= 1.0.7), RcppParallel, Matrix, data.table, RcppArmadillo (>= 0.10.7.5), RcppNumerical
+LinkingTo: Rcpp, RcppArmadillo (>= 0.10.7.5), RcppParallel, data.table, SPAtest,
+        RcppEigen, Matrix, methods, BH, optparse, SKAT, MetaSKAT, qlcMatrix, RhpcBLASctl, RSQLite, dplyr, nlme, MASS, RcppEigen, RcppNumerical
+Remotes: cysouw/qlcMatrix, leeshawn/MetaSKAT
+Depends: R (>= 3.5.0)
+SystemRequirements: GNU make
+RoxygenNote: 7.1.2
+NeedsCompilation: yes
+Encoding: UTF-8
+Packaged: 2026-1-5 EST
