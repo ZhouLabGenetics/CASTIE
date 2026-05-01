@@ -63,6 +63,7 @@ bool g_isSparseGRM;
 bool g_isStoreSigma;
 int g_num_Kmat;
 bool g_isGRM;
+bool g_use_PCG = false;
 arma::umat g_covarianceidxMat;
 arma::uvec g_covarianceidxMat_col1;
 arma::uvec g_covarianceidxMat_col2;
@@ -241,6 +242,12 @@ void setMarker_GlobalVarsInCPP(
 {
   g_isOutputMoreDetails = t_isOutputMoreDetails;
   g_marker_chunksize = t_marker_chunksize;
+}
+
+
+// [[Rcpp::export]]
+void set_use_PCG(bool use_PCG) {
+    g_use_PCG = use_PCG;
 }
 
 
@@ -4795,8 +4802,10 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
     }else{
         // Check if we can use the optimized analytical solution
         // Use Case 1 when: no E matrix OR E matrix exists but τ[2] = 0 (E term vanishes)
-        bool use_base_optimization = (g_EMat.n_rows == 0) || 
-                                     (tauVec.n_elem >= 3 && tauVec(2) == 0);
+        // Skip if g_use_PCG is set, which forces Case 3 (PCG iteration fallback)
+        bool use_base_optimization = !g_use_PCG &&
+                                     ((g_EMat.n_rows == 0) ||
+                                      (tauVec.n_elem >= 3 && tauVec(2) == 0));
         
         if (use_base_optimization) {
             // Case 1: No E matrix, use the original optimized solution

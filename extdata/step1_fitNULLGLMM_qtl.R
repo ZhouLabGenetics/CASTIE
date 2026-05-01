@@ -43,7 +43,7 @@ option_list <- list(
     help="Required. Column name of sample IDs in the phenotype file, e.g. IID"),
   make_option("--tol", type="numeric", default=0.02,
     help="Optional. Tolerance for fitting the null GLMM to converge [default=0.02]."),
-  make_option("--maxiter", type="integer", default=20,
+  make_option("--maxiter", type="integer", default=500,
     help="Optional. Maximum number of iterations used to fit the null GLMM [default=20]."),
   make_option("--tolPCG", type="numeric", default=1e-5,
     help="Optional. Tolerance for PCG to converge [default=1e-5]."),
@@ -117,7 +117,7 @@ option_list <- list(
    help="Optional. Values in the column for sex in the phenotype file are used for females [default, '1']"),
   make_option("--MaleCode", type="character", default="0",
    help="Optional. Values in the column for sex in the phenotype file are used for males [default, '0']"),
-  make_option("--isCovariateOffset", type="logical", default=TRUE,
+  make_option("--isCovariateOffset", type="logical", default=FALSE,
    help="Optional. Whether to estimate fixed effect coeffciets. [default, 'TRUE']"),
   make_option("--SampleIDIncludeFile", type="character",default="",
     help="Path to the file that contains one column for IDs of samples who will be include for null model fitting."),
@@ -134,6 +134,10 @@ option_list <- list(
    help="Optional. Whether to store the inv Sigma matrix. [default, 'TRUE']"),
   make_option("--isShrinkModelOutput", type="logical", default=TRUE,
    help="Optional. Whether to remove unnecessary objects for step2 from the model output. [default, 'TRUE']"),
+  make_option("--use_PCG", type="logical", default=FALSE,
+   help="Optional. Whether to force PCG (Case 3) solver for null model fitting. Automatically set to TRUE when variance components are out of bounds. [default, 'FALSE']"),
+  make_option("--isWriteReport", type="logical", default=FALSE,
+   help="Optional. Whether to save a fitting report (solver used, convergence, offset flag) to ./report/. [default, 'FALSE']"),
   make_option("--initialSubSampleProp",
   type="numeric", default=1,
       help="Optional. The proportion of subsamples used for estimate the inital values for variance covariance parameters"),
@@ -418,103 +422,194 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 
 if(!opt$isCovariateOffset){
   if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
-        cat("All variance component parameter estiamtes are out of bounds, now try including all covariates as offset\n")
-        opt$isCovariateOffset = TRUE
-        set.seed(1)
-        fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
-            bedFile=opt$bedFile,
-            bimFile=opt$bimFile,
-            famFile=opt$famFile,
-            useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
-            sparseGRMFile=opt$sparseGRMFile,
-            sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
-            phenoFile = opt$phenoFile,
-            phenoCol = opt$phenoCol,
-            isRemoveZerosinPheno = opt$isRemoveZerosinPheno,
-            sampleIDColinphenoFile = opt$sampleIDColinphenoFile,
-            traitType = opt$traitType,
-            outputPrefix = paste0(outputprefixsubset, ".offset"),
-            isCovariateOffset=opt$isCovariateOffset,
-            nThreads = opt$nThreads,
-            useSparseGRMforVarRatio = opt$useSparseGRMforVarRatio,
-            invNormalize = opt$invNormalize,
-            covarColList = covars,
-            qCovarCol = qcovars,
-            tol=opt$tol,
-            maxiter=opt$maxiter,
-            tolPCG=opt$tolPCG,
-            maxiterPCG=opt$maxiterPCG,
-            SPAcutoff = opt$SPAcutoff,
-            numMarkersForVarRatio = opt$numRandomMarkerforVarianceRatio,
-            skipModelFitting = opt$skipModelFitting,
-            skipVarianceRatioEstimation = TRUE,
-            memoryChunk = opt$memoryChunk,
-            tauInit = tauInit,
-            LOCO = opt$LOCO,
-            isLowMemLOCO = opt$isLowMemLOCO,
-            traceCVcutoff = opt$traceCVcutoff,
-            nrun = opt$nrun,
-            ratioCVcutoff = opt$ratioCVcutoff,
-            outputPrefix_varRatio = opt$outputPrefix_varRatio,
-            IsOverwriteVarianceRatioFile = opt$IsOverwriteVarianceRatioFile,
-            relatednessCutoff = opt$relatednessCutoff,
-            isCateVarianceRatio = opt$isCateVarianceRatio,
-            cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
-            cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
-            isCovariateTransform = opt$isCovariateTransform,
-            isDiagofKinSetAsOne = opt$isDiagofKinSetAsOne,
-            minMAFforGRM = opt$minMAFforGRM,
-            maxMissingRateforGRM = opt$maxMissingRateforGRM,
-            minCovariateCount=opt$minCovariateCount,
-            includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
-            sexCol=opt$sexCol,
-            FemaleCode=opt$FemaleCode,
-            FemaleOnly=opt$FemaleOnly,
-            MaleCode=opt$MaleCode,
-            MaleOnly=opt$MaleOnly,
-            SampleIDIncludeFile=opt$SampleIDIncludeFile,
-            VmatFilelist=opt$VmatFilelist,
-            VmatSampleFilelist=opt$VmatSampleFilelist,
-            longlCol=opt$longlCol,
-            useGRMtoFitNULL=opt$useGRMtoFitNULL,
-            offsetCol=opt$offsetCol,
-            varWeightsCol=opt$varWeightsCol,
-            sampleCovarCol=scovars,
-            isStoreSigma=opt$isStoreSigma,
-            isShrinkModelOutput=opt$isShrinkModelOutput,
-                  eCovarCol=ecovars
-        )
-       my_env = new.env()
-       load(paste0(outputprefixsubset, ".offset.rda"), envir = my_env)
-       modglmm = my_env$modglmm
-       print(modglmm$theta)
-       if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
-                cat("All variance component parameter estiamtes are out of bounds.\n")
-                file.remove(paste0(outputprefixsubset, ".offset.rda"))
-                if (file.exists(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))) {
-                  file.remove(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))
-                  #Delete file if it exists
-                }else{
-                  if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
-                    file.remove(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))
-                  }
-                }
-        }else{
-		tauVec = modglmm$theta
-		tauTable = rbind(tauTable, tauVec)
-                file.rename(paste0(outputprefixsubset, ".offset.rda"), paste0(outputprefixsubset, ".rda"))
-                if (file.exists(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))) {
-                  file.rename(paste0(outputprefixsubset, ".offset.varianceRatio.txt"), paste0(outputprefixsubset, ".varianceRatio.txt"))
-                  #Delete file if it exists
-                }else{
-                  if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
-                    file.rename(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"), paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt"))
-                  }
-                }
+        cat("Theta out of bounds, trying PCG solver first...\n")
+        pcg_success <- tryCatch({
+          set_use_PCG(TRUE)
+          set.seed(1)
+          fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
+              bedFile=opt$bedFile,
+              bimFile=opt$bimFile,
+              famFile=opt$famFile,
+              useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
+              sparseGRMFile=opt$sparseGRMFile,
+              sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
+              phenoFile = datasubsetFile,
+              phenoCol = opt$phenoCol,
+              isRemoveZerosinPheno = opt$isRemoveZerosinPheno,
+              sampleIDColinphenoFile = opt$sampleIDColinphenoFile,
+              traitType = opt$traitType,
+              outputPrefix = paste0(outputprefixsubset, ".pcg"),
+              isCovariateOffset = FALSE,
+              nThreads = opt$nThreads,
+              useSparseGRMforVarRatio = opt$useSparseGRMforVarRatio,
+              invNormalize = opt$invNormalize,
+              covarColList = covars,
+              qCovarCol = qcovars,
+              tol=opt$tol,
+              maxiter=opt$maxiter,
+              tolPCG=opt$tolPCG,
+              maxiterPCG=opt$maxiterPCG,
+              SPAcutoff = opt$SPAcutoff,
+              numMarkersForVarRatio = opt$numRandomMarkerforVarianceRatio,
+              skipModelFitting = opt$skipModelFitting,
+              skipVarianceRatioEstimation = TRUE,
+              memoryChunk = opt$memoryChunk,
+              tauInit = tauInit,
+              LOCO = opt$LOCO,
+              isLowMemLOCO = opt$isLowMemLOCO,
+              traceCVcutoff = opt$traceCVcutoff,
+              nrun = opt$nrun,
+              ratioCVcutoff = opt$ratioCVcutoff,
+              outputPrefix_varRatio = opt$outputPrefix_varRatio,
+              IsOverwriteVarianceRatioFile = opt$IsOverwriteVarianceRatioFile,
+              relatednessCutoff = opt$relatednessCutoff,
+              isCateVarianceRatio = opt$isCateVarianceRatio,
+              cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
+              cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
+              isCovariateTransform = opt$isCovariateTransform,
+              isDiagofKinSetAsOne = opt$isDiagofKinSetAsOne,
+              minMAFforGRM = opt$minMAFforGRM,
+              maxMissingRateforGRM = opt$maxMissingRateforGRM,
+              minCovariateCount=opt$minCovariateCount,
+              includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
+              sexCol=opt$sexCol,
+              FemaleCode=opt$FemaleCode,
+              FemaleOnly=opt$FemaleOnly,
+              MaleCode=opt$MaleCode,
+              MaleOnly=opt$MaleOnly,
+              SampleIDIncludeFile=opt$SampleIDIncludeFile,
+              VmatFilelist=opt$VmatFilelist,
+              VmatSampleFilelist=opt$VmatSampleFilelist,
+              longlCol=opt$longlCol,
+              useGRMtoFitNULL=opt$useGRMtoFitNULL,
+              offsetCol=opt$offsetCol,
+              varWeightsCol=opt$varWeightsCol,
+              sampleCovarCol=scovars,
+              isStoreSigma=opt$isStoreSigma,
+              isShrinkModelOutput=opt$isShrinkModelOutput,
+              eCovarCol=ecovars
+          )
+          TRUE
+        }, error = function(e) {
+          cat("PCG refit failed:", e$message, "\n")
+          FALSE
+        })
+        set_use_PCG(FALSE)
+
+        pcg_resolved <- FALSE
+        if(pcg_success){
+          my_env_pcg = new.env()
+          load(paste0(outputprefixsubset, ".pcg.rda"), envir = my_env_pcg)
+          modglmm_pcg = my_env_pcg$modglmm
+          print(modglmm_pcg$theta)
+          if(!is.null(modglmm_pcg$theta) &&
+             !(sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) <= 0 ||
+               sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) > 1)){
+            file.rename(paste0(outputprefixsubset, ".pcg.rda"), paste0(outputprefixsubset, ".rda"))
+            tauVec = modglmm_pcg$theta
+            tauTable = rbind(tauTable, tauVec)
+            cat("PCG solver succeeded, theta in bounds\n")
+            pcg_resolved <- TRUE
+          } else {
+            cat("PCG solver: theta still out of bounds\n")
+            if(file.exists(paste0(outputprefixsubset, ".pcg.rda"))) file.remove(paste0(outputprefixsubset, ".pcg.rda"))
+          }
         }
 
-
-
+        if(!pcg_resolved){
+          cat("All variance component parameter estiamtes are out of bounds, now try including all covariates as offset\n")
+          opt$isCovariateOffset = TRUE
+          set.seed(1)
+          fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
+              bedFile=opt$bedFile,
+              bimFile=opt$bimFile,
+              famFile=opt$famFile,
+              useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
+              sparseGRMFile=opt$sparseGRMFile,
+              sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
+              phenoFile = opt$phenoFile,
+              phenoCol = opt$phenoCol,
+              isRemoveZerosinPheno = opt$isRemoveZerosinPheno,
+              sampleIDColinphenoFile = opt$sampleIDColinphenoFile,
+              traitType = opt$traitType,
+              outputPrefix = paste0(outputprefixsubset, ".offset"),
+              isCovariateOffset=opt$isCovariateOffset,
+              nThreads = opt$nThreads,
+              useSparseGRMforVarRatio = opt$useSparseGRMforVarRatio,
+              invNormalize = opt$invNormalize,
+              covarColList = covars,
+              qCovarCol = qcovars,
+              tol=opt$tol,
+              maxiter=opt$maxiter,
+              tolPCG=opt$tolPCG,
+              maxiterPCG=opt$maxiterPCG,
+              SPAcutoff = opt$SPAcutoff,
+              numMarkersForVarRatio = opt$numRandomMarkerforVarianceRatio,
+              skipModelFitting = opt$skipModelFitting,
+              skipVarianceRatioEstimation = TRUE,
+              memoryChunk = opt$memoryChunk,
+              tauInit = tauInit,
+              LOCO = opt$LOCO,
+              isLowMemLOCO = opt$isLowMemLOCO,
+              traceCVcutoff = opt$traceCVcutoff,
+              nrun = opt$nrun,
+              ratioCVcutoff = opt$ratioCVcutoff,
+              outputPrefix_varRatio = opt$outputPrefix_varRatio,
+              IsOverwriteVarianceRatioFile = opt$IsOverwriteVarianceRatioFile,
+              relatednessCutoff = opt$relatednessCutoff,
+              isCateVarianceRatio = opt$isCateVarianceRatio,
+              cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
+              cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
+              isCovariateTransform = opt$isCovariateTransform,
+              isDiagofKinSetAsOne = opt$isDiagofKinSetAsOne,
+              minMAFforGRM = opt$minMAFforGRM,
+              maxMissingRateforGRM = opt$maxMissingRateforGRM,
+              minCovariateCount=opt$minCovariateCount,
+              includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
+              sexCol=opt$sexCol,
+              FemaleCode=opt$FemaleCode,
+              FemaleOnly=opt$FemaleOnly,
+              MaleCode=opt$MaleCode,
+              MaleOnly=opt$MaleOnly,
+              SampleIDIncludeFile=opt$SampleIDIncludeFile,
+              VmatFilelist=opt$VmatFilelist,
+              VmatSampleFilelist=opt$VmatSampleFilelist,
+              longlCol=opt$longlCol,
+              useGRMtoFitNULL=opt$useGRMtoFitNULL,
+              offsetCol=opt$offsetCol,
+              varWeightsCol=opt$varWeightsCol,
+              sampleCovarCol=scovars,
+              isStoreSigma=opt$isStoreSigma,
+              isShrinkModelOutput=opt$isShrinkModelOutput,
+              eCovarCol=ecovars
+          )
+          my_env = new.env()
+          load(paste0(outputprefixsubset, ".offset.rda"), envir = my_env)
+          modglmm = my_env$modglmm
+          print(modglmm$theta)
+          if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
+            cat("All variance component parameter estiamtes are out of bounds.\n")
+            file.remove(paste0(outputprefixsubset, ".offset.rda"))
+            if (file.exists(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))) {
+              file.remove(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))
+            }else{
+              if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
+                file.remove(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))
+              }
+            }
+          }else{
+            tauVec = modglmm$theta
+            tauTable = rbind(tauTable, tauVec)
+            file.rename(paste0(outputprefixsubset, ".offset.rda"), paste0(outputprefixsubset, ".rda"))
+            if (file.exists(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))) {
+              file.rename(paste0(outputprefixsubset, ".offset.varianceRatio.txt"), paste0(outputprefixsubset, ".varianceRatio.txt"))
+            }else{
+              if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
+                file.rename(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"), paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt"))
+              }
+            }
+          }
+        }
 
 
   }else{
@@ -549,6 +644,10 @@ print(tauInit)
 tauInit <- convertoNumeric(strsplit(opt$tauInit, ",")[[1]], "tauInit")
 }
 
+
+# Tracking variables for the final report
+step1_used_pcg <- FALSE
+step1_used_offset <- opt$isCovariateOffset
 
 fit_success <- TRUE
 tryCatch({
@@ -625,193 +724,263 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 })
 
 
-if(fit_success){
+# ── Helper functions for the 4-stage fallback ──────────────────────────────
+.fitStage <- function(suffix, isCovOff, usePCG) {
+  if (usePCG) set_use_PCG(TRUE)
+  set.seed(1)
+  result <- tryCatch(
+    fitNULLGLMM_multiV(
+      plinkFile=opt$plinkFile, bedFile=opt$bedFile,
+      bimFile=opt$bimFile, famFile=opt$famFile,
+      useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
+      sparseGRMFile=opt$sparseGRMFile,
+      sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
+      phenoFile=opt$phenoFile, phenoCol=opt$phenoCol,
+      isRemoveZerosinPheno=opt$isRemoveZerosinPheno,
+      sampleIDColinphenoFile=opt$sampleIDColinphenoFile,
+      traitType=opt$traitType,
+      outputPrefix=paste0(opt$outputPrefix, suffix),
+      isCovariateOffset=isCovOff,
+      nThreads=opt$nThreads,
+      useSparseGRMforVarRatio=opt$useSparseGRMforVarRatio,
+      invNormalize=opt$invNormalize,
+      covarColList=covars, qCovarCol=qcovars,
+      tol=opt$tol, maxiter=opt$maxiter,
+      tolPCG=opt$tolPCG, maxiterPCG=opt$maxiterPCG,
+      SPAcutoff=opt$SPAcutoff,
+      numMarkersForVarRatio=opt$numRandomMarkerforVarianceRatio,
+      skipModelFitting=opt$skipModelFitting,
+      skipVarianceRatioEstimation=opt$skipVarianceRatioEstimation,
+      memoryChunk=opt$memoryChunk, tauInit=tauInit,
+      LOCO=opt$LOCO, isLowMemLOCO=opt$isLowMemLOCO,
+      traceCVcutoff=opt$traceCVcutoff, nrun=opt$nrun,
+      ratioCVcutoff=opt$ratioCVcutoff,
+      outputPrefix_varRatio=opt$outputPrefix_varRatio,
+      IsOverwriteVarianceRatioFile=opt$IsOverwriteVarianceRatioFile,
+      relatednessCutoff=opt$relatednessCutoff,
+      isCateVarianceRatio=opt$isCateVarianceRatio,
+      cateVarRatioMinMACVecExclude=cateVarRatioMinMACVecExclude,
+      cateVarRatioMaxMACVecInclude=cateVarRatioMaxMACVecInclude,
+      isCovariateTransform=opt$isCovariateTransform,
+      isDiagofKinSetAsOne=opt$isDiagofKinSetAsOne,
+      minMAFforGRM=opt$minMAFforGRM,
+      maxMissingRateforGRM=opt$maxMissingRateforGRM,
+      minCovariateCount=opt$minCovariateCount,
+      includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
+      sexCol=opt$sexCol, FemaleCode=opt$FemaleCode,
+      FemaleOnly=opt$FemaleOnly, MaleCode=opt$MaleCode, MaleOnly=opt$MaleOnly,
+      SampleIDIncludeFile=opt$SampleIDIncludeFile,
+      VmatFilelist=opt$VmatFilelist, VmatSampleFilelist=opt$VmatSampleFilelist,
+      longlCol=opt$longlCol, useGRMtoFitNULL=opt$useGRMtoFitNULL,
+      offsetCol=opt$offsetCol, varWeightsCol=opt$varWeightsCol,
+      sampleCovarCol=scovars, isStoreSigma=opt$isStoreSigma,
+      isShrinkModelOutput=opt$isShrinkModelOutput, eCovarCol=ecovars
+    ),
+    error = function(e) { cat("Fit failed:", e$message, "\n"); NULL }
+  )
+  if (usePCG) set_use_PCG(FALSE)
+  !is.null(result)
+}
 
-if(!opt$isCovariateOffset){
-  my_env = new.env()
-  load(paste0(opt$outputPrefix, ".rda"), envir = my_env)
-  modglmm = my_env$modglmm
-  print(modglmm$theta)
-  if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
-  	cat("All variance component parameter estiamtes are out of bounds, now try including all covariates as offset\n")
-	opt$isCovariateOffset = TRUE
-	set.seed(1)
-	fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
-            bedFile=opt$bedFile,
-            bimFile=opt$bimFile,
-            famFile=opt$famFile,
-            useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
-            sparseGRMFile=opt$sparseGRMFile,
-            sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
-            phenoFile = opt$phenoFile,
-            phenoCol = opt$phenoCol,
-            isRemoveZerosinPheno = opt$isRemoveZerosinPheno,
-            sampleIDColinphenoFile = opt$sampleIDColinphenoFile,
-            traitType = opt$traitType,
-            outputPrefix = paste0(opt$outputPrefix, ".offset"),
-            isCovariateOffset=opt$isCovariateOffset,
-            nThreads = opt$nThreads,
-            useSparseGRMforVarRatio = opt$useSparseGRMforVarRatio,
-            invNormalize = opt$invNormalize,
-            covarColList = covars,
-            qCovarCol = qcovars,
-            tol=opt$tol,
-            maxiter=opt$maxiter,
-            tolPCG=opt$tolPCG,
-            maxiterPCG=opt$maxiterPCG,
-            SPAcutoff = opt$SPAcutoff,
-            numMarkersForVarRatio = opt$numRandomMarkerforVarianceRatio,
-            skipModelFitting = opt$skipModelFitting,
-            skipVarianceRatioEstimation = opt$skipVarianceRatioEstimation,
-            memoryChunk = opt$memoryChunk,
-            tauInit = tauInit,
-            LOCO = opt$LOCO,
-            isLowMemLOCO = opt$isLowMemLOCO,
-            traceCVcutoff = opt$traceCVcutoff,
-            nrun = opt$nrun,
-            ratioCVcutoff = opt$ratioCVcutoff,
-            outputPrefix_varRatio = opt$outputPrefix_varRatio,
-            IsOverwriteVarianceRatioFile = opt$IsOverwriteVarianceRatioFile,
-            relatednessCutoff = opt$relatednessCutoff,
-            isCateVarianceRatio = opt$isCateVarianceRatio,
-            cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
-            cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
-            isCovariateTransform = opt$isCovariateTransform,
-            isDiagofKinSetAsOne = opt$isDiagofKinSetAsOne,
-            minMAFforGRM = opt$minMAFforGRM,
-            maxMissingRateforGRM = opt$maxMissingRateforGRM,
-            minCovariateCount=opt$minCovariateCount,
-            includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
-            sexCol=opt$sexCol,
-            FemaleCode=opt$FemaleCode,
-            FemaleOnly=opt$FemaleOnly,
-            MaleCode=opt$MaleCode,
-            MaleOnly=opt$MaleOnly,
-            SampleIDIncludeFile=opt$SampleIDIncludeFile,
-            VmatFilelist=opt$VmatFilelist,
-            VmatSampleFilelist=opt$VmatSampleFilelist,
-            longlCol=opt$longlCol,
-            useGRMtoFitNULL=opt$useGRMtoFitNULL,
-            offsetCol=opt$offsetCol,
-            varWeightsCol=opt$varWeightsCol,
-            sampleCovarCol=scovars,
-            isStoreSigma=opt$isStoreSigma,
-            isShrinkModelOutput=opt$isShrinkModelOutput,
-	          eCovarCol=ecovars
-        )
-       my_env = new.env()
-       load(paste0(opt$outputPrefix, ".offset.rda"), envir = my_env)
-       modglmm = my_env$modglmm
-       print(modglmm$theta)
-       if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
-		cat("All variance component parameter estiamtes are out of bounds.\n")
-		file.remove(paste0(opt$outputPrefix, ".offset.rda"))
-		if (file.exists(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"))) {
-		  file.remove(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"))
-		  #Delete file if it exists
-		}else{
-		  if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
-                    file.remove(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))
-                  }
-		}
-	}else{
+.thetaOK <- function(suffix) {
+  rda <- paste0(opt$outputPrefix, suffix, ".rda")
+  if (!file.exists(rda)) return(FALSE)
+  e <- new.env(); load(rda, envir = e)
+  m <- e$modglmm; print(m$theta)
+  !is.null(m$theta) &&
+    !(sum(m$theta[2:length(m$theta)]) <= 0 || sum(m$theta[2:length(m$theta)]) > 1)
+}
 
-		file.rename(paste0(opt$outputPrefix, ".offset.rda"), paste0(opt$outputPrefix, ".rda"))
-		if (file.exists(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"))) {
-                  file.rename(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"), paste0(opt$outputPrefix, ".varianceRatio.txt"))
-                  #Delete file if it exists
-                }else{
-                  if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
-                    file.rename(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"), paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt"))
-                  }
-                }
-	}
+.promote <- function(suffix) {
+  from_rda <- paste0(opt$outputPrefix, suffix, ".rda")
+  to_rda   <- paste0(opt$outputPrefix, ".rda")
+  if (file.exists(from_rda)) file.rename(from_rda, to_rda)
+  from_vr <- paste0(opt$outputPrefix, suffix, ".varianceRatio.txt")
+  to_vr   <- paste0(opt$outputPrefix, ".varianceRatio.txt")
+  if (file.exists(from_vr)) {
+    file.rename(from_vr, to_vr)
+  } else {
+    from_vr2 <- paste0(opt$outputPrefix_varRatio, suffix, ".varianceRatio.txt")
+    to_vr2   <- paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt")
+    if (file.exists(from_vr2)) file.rename(from_vr2, to_vr2)
   }
 }
 
-}else{
-	cat("All variance component parameter estiamtes are out of bounds, now try including all covariates as offset and set up maxiter=100\n")
-	
-        opt$isCovariateOffset = TRUE
-        opt$maxiter=100
-        set.seed(1)
-        fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
-            bedFile=opt$bedFile,
-            bimFile=opt$bimFile,
-            famFile=opt$famFile,
-            useSparseGRMtoFitNULL=opt$useSparseGRMtoFitNULL,
-            sparseGRMFile=opt$sparseGRMFile,
-            sparseGRMSampleIDFile=opt$sparseGRMSampleIDFile,
-            phenoFile = opt$phenoFile,
-            phenoCol = opt$phenoCol,
-            isRemoveZerosinPheno = opt$isRemoveZerosinPheno,
-            sampleIDColinphenoFile = opt$sampleIDColinphenoFile,
-            traitType = opt$traitType,
-            outputPrefix = paste0(opt$outputPrefix, ".offset"),
-            isCovariateOffset=opt$isCovariateOffset,
-            nThreads = opt$nThreads,
-            useSparseGRMforVarRatio = opt$useSparseGRMforVarRatio,
-            invNormalize = opt$invNormalize,
-            covarColList = covars,
-            qCovarCol = qcovars,
-            tol=opt$tol,
-            maxiter=opt$maxiter,
-            tolPCG=opt$tolPCG,
-            maxiterPCG=opt$maxiterPCG,
-            SPAcutoff = opt$SPAcutoff,
-            numMarkersForVarRatio = opt$numRandomMarkerforVarianceRatio,
-            skipModelFitting = opt$skipModelFitting,
-            skipVarianceRatioEstimation = opt$skipVarianceRatioEstimation,
-            memoryChunk = opt$memoryChunk,
-            tauInit = tauInit,
-            LOCO = opt$LOCO,
-            isLowMemLOCO = opt$isLowMemLOCO,
-            traceCVcutoff = opt$traceCVcutoff,
-            nrun = opt$nrun,
-            ratioCVcutoff = opt$ratioCVcutoff,
-            outputPrefix_varRatio = opt$outputPrefix_varRatio,
-            IsOverwriteVarianceRatioFile = opt$IsOverwriteVarianceRatioFile,
-            relatednessCutoff = opt$relatednessCutoff,
-            isCateVarianceRatio = opt$isCateVarianceRatio,
-            cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
-            cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
-            isCovariateTransform = opt$isCovariateTransform,
-            isDiagofKinSetAsOne = opt$isDiagofKinSetAsOne,
-            minMAFforGRM = opt$minMAFforGRM,
-            maxMissingRateforGRM = opt$maxMissingRateforGRM,
-            minCovariateCount=opt$minCovariateCount,
-            includeNonautoMarkersforVarRatio=opt$includeNonautoMarkersforVarRatio,
-            sexCol=opt$sexCol,
-            FemaleCode=opt$FemaleCode,
-            FemaleOnly=opt$FemaleOnly,
-            MaleCode=opt$MaleCode,
-            MaleOnly=opt$MaleOnly,
-            SampleIDIncludeFile=opt$SampleIDIncludeFile,
-            VmatFilelist=opt$VmatFilelist,
-            VmatSampleFilelist=opt$VmatSampleFilelist,
-            longlCol=opt$longlCol,
-            useGRMtoFitNULL=opt$useGRMtoFitNULL,
-            offsetCol=opt$offsetCol,
-            varWeightsCol=opt$varWeightsCol,
-            sampleCovarCol=scovars,
-            isStoreSigma=opt$isStoreSigma,
-            isShrinkModelOutput=opt$isShrinkModelOutput,
-                  eCovarCol=ecovars
-        )
-        ## rename offset files to regular
-        if (file.exists(paste0(opt$outputPrefix, ".offset.rda"))) {
-          file.rename(paste0(opt$outputPrefix, ".offset.rda"),
-                      paste0(opt$outputPrefix, ".rda"))
-          cat("Renamed .offset.rda → .rda\n")
-        }
-        if (file.exists(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"))) {
-          file.rename(paste0(opt$outputPrefix, ".offset.varianceRatio.txt"),
-                      paste0(opt$outputPrefix, ".varianceRatio.txt"))
-          cat("Renamed .offset.varianceRatio.txt → .varianceRatio.txt\n")
-        } else if (file.exists(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"))) {
-          file.rename(paste0(opt$outputPrefix_varRatio, ".offset.varianceRatio.txt"),
-                      paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt"))
-          cat("Renamed offset varianceRatio in varRatio path\n")
-        }
+.cleanup <- function(suffix) {
+  for (f in c(paste0(opt$outputPrefix, suffix, ".rda"),
+              paste0(opt$outputPrefix, suffix, ".varianceRatio.txt"),
+              paste0(opt$outputPrefix_varRatio, suffix, ".varianceRatio.txt")))
+    if (file.exists(f)) file.remove(f)
 }
 
+# ── 4-stage fallback ─────────────────────────────────────────────────────────
+# Stage 1: SMW + isCovariateOffset=FALSE  (initial fit, already done)
+# Stage 2: SMW + isCovariateOffset=TRUE
+# Stage 3: PCG + isCovariateOffset=FALSE
+# Stage 4: PCG + isCovariateOffset=TRUE   (final, kept regardless)
+
+if(fit_success){
+
+  if(!opt$isCovariateOffset){
+    # Stage 1 result is in .rda — check theta
+    if(!.thetaOK("")){
+      # Stage 2: SMW + offset=TRUE
+      cat("Stage 1 theta OOB. Trying Stage 2: SMW + isCovariateOffset=TRUE\n")
+      .fitStage(".stage2", isCovOff=TRUE, usePCG=FALSE)
+      if(.thetaOK(".stage2")){
+        .promote(".stage2")
+        step1_used_offset <- TRUE
+        cat("Stage 2 succeeded\n")
+      } else {
+        .cleanup(".stage2")
+        # Stage 3: PCG + offset=FALSE
+        cat("Stage 2 theta OOB. Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
+        .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE)
+        if(.thetaOK(".stage3")){
+          .promote(".stage3")
+          step1_used_pcg <- TRUE
+          cat("Stage 3 succeeded\n")
+        } else {
+          .cleanup(".stage3")
+          # Stage 4: PCG + offset=TRUE (final — keep regardless)
+          cat("Stage 3 theta OOB. Trying Stage 4: PCG + isCovariateOffset=TRUE\n")
+          .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE)
+          .promote(".stage4")
+          step1_used_pcg    <- TRUE
+          step1_used_offset <- TRUE
+          cat("Stage 4 complete (final fallback)\n")
+        }
+      }
+    }
+    # else: Stage 1 theta OK, .rda kept as-is
+  }
+
+}else{
+  # fit_success=FALSE: initial fit errored — start at Stage 2
+  # Stage 2: SMW + offset=TRUE
+  cat("Initial fit errored. Trying Stage 2: SMW + isCovariateOffset=TRUE\n")
+  .fitStage(".stage2", isCovOff=TRUE, usePCG=FALSE)
+  if(.thetaOK(".stage2")){
+    .promote(".stage2")
+    step1_used_offset <- TRUE
+    cat("Stage 2 succeeded\n")
+  } else {
+    .cleanup(".stage2")
+    # Stage 3: PCG + offset=FALSE
+    cat("Stage 2 theta OOB. Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
+    .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE)
+    if(.thetaOK(".stage3")){
+      .promote(".stage3")
+      step1_used_pcg <- TRUE
+      cat("Stage 3 succeeded\n")
+    } else {
+      .cleanup(".stage3")
+      # Stage 4: PCG + offset=TRUE (final — keep regardless)
+      cat("Stage 3 theta OOB. Trying Stage 4: PCG + isCovariateOffset=TRUE\n")
+      .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE)
+      .promote(".stage4")
+      step1_used_pcg    <- TRUE
+      step1_used_offset <- TRUE
+      cat("Stage 4 complete (final fallback)\n")
+    }
+  }
+}
+
+
+# ── Report ──────────────────────────────────────────────────────────────────
+
+write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
+                               used_pcg, used_offset, fit_success, opt) {
+  dir.create("./report", showWarnings = FALSE, recursive = TRUE)
+  report_file <- file.path("./report",
+                           paste0(basename(outputPrefix), ".step1_report.txt"))
+
+  model_file <- paste0(outputPrefix, ".rda")
+
+  # Find variance ratio file
+  var_ratio_file <- ""
+  for (f in c(paste0(outputPrefix_varRatio, ".varianceRatio.txt"),
+              paste0(outputPrefix, ".varianceRatio.txt"))) {
+    if (file.exists(f)) { var_ratio_file <- f; break }
+  }
+
+  # Load final model to read theta and convergence
+  theta_vals          <- NA
+  converged           <- FALSE
+  is_cov_offset_final <- used_offset
+  if (file.exists(model_file)) {
+    tmp_env <- new.env()
+    load(model_file, envir = tmp_env)
+    m <- tmp_env$modglmm
+    theta_vals <- m$theta
+    converged  <- isTRUE(m$converged)
+    if (!is.null(m$isCovariateOffset)) is_cov_offset_final <- m$isCovariateOffset
+  }
+
+  theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
+               sum(theta_vals[2:length(theta_vals)]) <= 0 ||
+               sum(theta_vals[2:length(theta_vals)]) > 1
+
+  overall_ok <- fit_success && file.exists(model_file) && converged && !theta_oob
+  status_str <- if (overall_ok) "SUCCESS" else "FAILURE"
+  solver_str <- if (used_pcg) "PCG" else "SMW"
+  theta_str  <- if (all(!is.na(theta_vals))) {
+    paste(round(theta_vals, 6), collapse = ", ")
+  } else { "NA" }
+
+  writeLines(c(
+    "=== SAIGE-QTL Step 1 Fitting Report ===",
+    paste0("Date              : ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+    paste0("Output prefix     : ", outputPrefix),
+    paste0("Phenotype         : ", opt$phenoCol),
+    paste0("Trait type        : ", opt$traitType),
+    "",
+    "--- Convergence ---",
+    paste0("Status            : ", status_str),
+    paste0("fit_success       : ", fit_success),
+    paste0("converged flag    : ", converged),
+    paste0("Theta in bounds   : ", !theta_oob),
+    paste0("Final theta       : ", theta_str),
+    "",
+    "--- Solver ---",
+    paste0("Solver used       : ", solver_str),
+    paste0("isCovariateOffset : ", is_cov_offset_final),
+    "",
+    "--- Output files ---",
+    paste0("Model file        : ", model_file,
+           " (exists: ", file.exists(model_file), ")"),
+    paste0("Var ratio file    : ",
+           if (var_ratio_file != "") var_ratio_file else "not found")
+  ), report_file)
+
+  cat("\n=== FINAL SUMMARY ===\n")
+  cat(sprintf("Analysis Status  : %s\n", status_str))
+  cat(sprintf("Solver used      : %s\n", solver_str))
+  cat(sprintf("isCovariateOffset: %s\n", is_cov_offset_final))
+  if (overall_ok) {
+    cat("Model file       :", model_file, "\n")
+    if (var_ratio_file != "") cat("Var ratio file   :", var_ratio_file, "\n")
+  } else {
+    cat("Step 1 did not converge cleanly. Check report for details.\n")
+  }
+  cat(sprintf("Report saved     : %s\n", report_file))
+
+  invisible(list(
+    convergence_status  = status_str,
+    final_model_file    = model_file,
+    variance_ratio_file = var_ratio_file,
+    solver              = solver_str,
+    is_cov_offset       = is_cov_offset_final
+  ))
+}
+
+if (opt$isWriteReport) {
+  write_step1_report(
+    outputPrefix          = opt$outputPrefix,
+    outputPrefix_varRatio = opt$outputPrefix_varRatio,
+    used_pcg              = step1_used_pcg,
+    used_offset           = step1_used_offset,
+    fit_success           = fit_success,
+    opt                   = opt
+  )
+}
