@@ -63,7 +63,7 @@ bool g_isSparseGRM;
 bool g_isStoreSigma;
 int g_num_Kmat;
 bool g_isGRM;
-bool g_use_PCG = false;
+bool g_usePCG = false;
 arma::umat g_covarianceidxMat;
 arma::uvec g_covarianceidxMat_col1;
 arma::uvec g_covarianceidxMat_col2;
@@ -246,8 +246,8 @@ void setMarker_GlobalVarsInCPP(
 
 
 // [[Rcpp::export]]
-void set_use_PCG(bool use_PCG) {
-    g_use_PCG = use_PCG;
+void set_usePCG(bool usePCG) {
+    g_usePCG = usePCG;
 }
 
 
@@ -4802,8 +4802,8 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
     }else{
         // Check if we can use the optimized analytical solution
         // Use Case 1 when: no E matrix OR E matrix exists but τ[2] = 0 (E term vanishes)
-        // Skip if g_use_PCG is set, which forces Case 3 (PCG iteration fallback)
-        bool use_base_optimization = !g_use_PCG &&
+        // Skip if g_usePCG is set, which forces Case 3 (PCG iteration fallback)
+        bool use_base_optimization = !g_usePCG &&
                                      ((g_EMat.n_rows == 0) ||
                                       (tauVec.n_elem >= 3 && tauVec(2) == 0));
         
@@ -4865,7 +4865,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
                 }
 #endif
             }
-        } else if (!g_use_PCG && g_EMat.n_rows > 0 && tauVec.n_elem >= 3 && tauVec(2) != 0) {
+        } else if (!g_usePCG && g_EMat.n_rows > 0 && tauVec.n_elem >= 3 && tauVec(2) != 0) {
             // Case 2: E matrix present with non-zero τ[2], use Woodbury formula for low-rank update
             // Debug and fix E matrix dimensions
             int k_raw = g_EMat.n_rows;

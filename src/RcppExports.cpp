@@ -502,13 +502,13 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// set_use_PCG
-void set_use_PCG(bool use_PCG);
-RcppExport SEXP _SAIGEQTL_set_use_PCG(SEXP use_PCGSEXP) {
+// set_usePCG
+void set_usePCG(bool usePCG);
+RcppExport SEXP _SAIGEQTL_set_usePCG(SEXP usePCGSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< bool >::type use_PCG(use_PCGSEXP);
-    set_use_PCG(use_PCG);
+    Rcpp::traits::input_parameter< bool >::type usePCG(usePCGSEXP);
+    set_usePCG(usePCG);
     return R_NilValue;
 END_RCPP
 }
@@ -2595,7 +2595,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_SAIGEQTL_removeOutfile_inGroup", (DL_FUNC) &_SAIGEQTL_removeOutfile_inGroup, 0},
     {"_SAIGEQTL_removeOutfile_inSingle", (DL_FUNC) &_SAIGEQTL_removeOutfile_inSingle, 0},
     {"_SAIGEQTL_openOutfile_single", (DL_FUNC) &_SAIGEQTL_openOutfile_single, 5},
-    {"_SAIGEQTL_set_use_PCG", (DL_FUNC) &_SAIGEQTL_set_use_PCG, 1},
+    {"_SAIGEQTL_set_usePCG", (DL_FUNC) &_SAIGEQTL_set_usePCG, 1},
     {"_SAIGEQTL_set_flagSparseGRM_cur_SAIGE", (DL_FUNC) &_SAIGEQTL_set_flagSparseGRM_cur_SAIGE, 1},
     {"_SAIGEQTL_set_flagSparseGRM_cur_SAIGE_org", (DL_FUNC) &_SAIGEQTL_set_flagSparseGRM_cur_SAIGE_org, 0},
     {"_SAIGEQTL_copy_singleInGroup", (DL_FUNC) &_SAIGEQTL_copy_singleInGroup, 0},

@@ -29,8 +29,8 @@ setAssocTest_GlobalVarsInCPP_GbyE <- function(t_emat, t_isgxe, t_pval_cutoff_for
     invisible(.Call('_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE', PACKAGE = 'SAIGEQTL', t_emat, t_isgxe, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge))
 }
 
-set_use_PCG <- function(use_PCG) {
-    invisible(.Call('_SAIGEQTL_set_use_PCG', PACKAGE = 'SAIGEQTL', use_PCG))
+set_usePCG <- function(usePCG) {
+    invisible(.Call('_SAIGEQTL_set_usePCG', PACKAGE = 'SAIGEQTL', usePCG))
 }
 
 set_permute_ginge_indices <- function(sample_ids) {

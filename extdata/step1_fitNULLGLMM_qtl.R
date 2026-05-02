@@ -134,7 +134,7 @@ option_list <- list(
    help="Optional. Whether to store the inv Sigma matrix. [default, 'TRUE']"),
   make_option("--isShrinkModelOutput", type="logical", default=TRUE,
    help="Optional. Whether to remove unnecessary objects for step2 from the model output. [default, 'TRUE']"),
-  make_option("--use_PCG", type="logical", default=FALSE,
+  make_option("--usePCG", type="logical", default=FALSE,
    help="Optional. Whether to force PCG (Case 3) solver for null model fitting. Automatically set to TRUE when variance components are out of bounds. [default, 'FALSE']"),
   make_option("--isWriteReport", type="logical", default=FALSE,
    help="Optional. Whether to save a fitting report (solver used, convergence, offset flag) to ./report/. [default, 'FALSE']"),
@@ -424,7 +424,7 @@ if(!opt$isCovariateOffset){
   if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
         cat("Theta out of bounds, trying PCG solver first...\n")
         pcg_success <- tryCatch({
-          set_use_PCG(TRUE)
+          set_usePCG(TRUE)
           set.seed(1)
           fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
               bedFile=opt$bedFile,
@@ -494,7 +494,7 @@ if(!opt$isCovariateOffset){
           cat("PCG refit failed:", e$message, "\n")
           FALSE
         })
-        set_use_PCG(FALSE)
+        set_usePCG(FALSE)
 
         pcg_resolved <- FALSE
         if(pcg_success){
@@ -648,6 +648,7 @@ tauInit <- convertoNumeric(strsplit(opt$tauInit, ",")[[1]], "tauInit")
 # Tracking variables for the final report
 step1_used_pcg <- FALSE
 step1_used_offset <- opt$isCovariateOffset
+step1_tau_switched <- FALSE
 
 fit_success <- TRUE
 tryCatch({
@@ -725,8 +726,8 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 
 
 # ── Helper functions for the 4-stage fallback ──────────────────────────────
-.fitStage <- function(suffix, isCovOff, usePCG) {
-  if (usePCG) set_use_PCG(TRUE)
+.fitStage <- function(suffix, isCovOff, usePCG, tauInitVal = tauInit) {
+  if (usePCG) set_usePCG(TRUE)
   set.seed(1)
   result <- tryCatch(
     fitNULLGLMM_multiV(
@@ -751,7 +752,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
       numMarkersForVarRatio=opt$numRandomMarkerforVarianceRatio,
       skipModelFitting=opt$skipModelFitting,
       skipVarianceRatioEstimation=opt$skipVarianceRatioEstimation,
-      memoryChunk=opt$memoryChunk, tauInit=tauInit,
+      memoryChunk=opt$memoryChunk, tauInit=tauInitVal,
       LOCO=opt$LOCO, isLowMemLOCO=opt$isLowMemLOCO,
       traceCVcutoff=opt$traceCVcutoff, nrun=opt$nrun,
       ratioCVcutoff=opt$ratioCVcutoff,
@@ -778,7 +779,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
     ),
     error = function(e) { cat("Fit failed:", e$message, "\n"); NULL }
   )
-  if (usePCG) set_use_PCG(FALSE)
+  if (usePCG) set_usePCG(FALSE)
   !is.null(result)
 }
 
@@ -815,84 +816,110 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
     if (file.exists(f)) file.remove(f)
 }
 
-# ── 4-stage fallback ─────────────────────────────────────────────────────────
+# ── 6-stage fallback ─────────────────────────────────────────────────────────
 # Stage 1: SMW + isCovariateOffset=FALSE  (initial fit, already done)
 # Stage 2: SMW + isCovariateOffset=TRUE
+# Stage 2b: SMW + isCovariateOffset=FALSE + tauInit=c(1,0.1,0)  (if tauInit ≠ c(1,0.1,0))
+# Stage 2c: SMW + isCovariateOffset=TRUE  + tauInit=c(1,0.1,0)  (if tauInit ≠ c(1,0.1,0))
 # Stage 3: PCG + isCovariateOffset=FALSE
 # Stage 4: PCG + isCovariateOffset=TRUE   (final, kept regardless)
 
-if(fit_success){
+.tau_default <- c(1, 0.1, 0)
+.tau_is_default <- function(tau) {
+  length(tau) == length(.tau_default) && isTRUE(all.equal(as.numeric(tau), .tau_default))
+}
 
-  if(!opt$isCovariateOffset){
-    # Stage 1 result is in .rda — check theta
-    if(!.thetaOK("")){
-      # Stage 2: SMW + offset=TRUE
-      cat("Stage 1 theta OOB. Trying Stage 2: SMW + isCovariateOffset=TRUE\n")
-      .fitStage(".stage2", isCovOff=TRUE, usePCG=FALSE)
-      if(.thetaOK(".stage2")){
-        .promote(".stage2")
-        step1_used_offset <- TRUE
-        cat("Stage 2 succeeded\n")
-      } else {
-        .cleanup(".stage2")
-        # Stage 3: PCG + offset=FALSE
-        cat("Stage 2 theta OOB. Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
-        .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE)
-        if(.thetaOK(".stage3")){
-          .promote(".stage3")
-          step1_used_pcg <- TRUE
-          cat("Stage 3 succeeded\n")
-        } else {
-          .cleanup(".stage3")
-          # Stage 4: PCG + offset=TRUE (final — keep regardless)
-          cat("Stage 3 theta OOB. Trying Stage 4: PCG + isCovariateOffset=TRUE\n")
-          .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE)
-          .promote(".stage4")
-          step1_used_pcg    <- TRUE
-          step1_used_offset <- TRUE
-          cat("Stage 4 complete (final fallback)\n")
-        }
-      }
+.run_fallback_chain <- function(start_stage) {
+  solved <- FALSE
+
+  if (start_stage <= 2) {
+    # Stage 2: SMW + offset=TRUE
+    cat("Trying Stage 2: SMW + isCovariateOffset=TRUE\n")
+    .fitStage(".stage2", isCovOff=TRUE, usePCG=FALSE)
+    if (.thetaOK(".stage2")) {
+      .promote(".stage2")
+      step1_used_offset <<- TRUE
+      cat("Stage 2 succeeded\n")
+      solved <- TRUE
+    } else {
+      .cleanup(".stage2")
     }
-    # else: Stage 1 theta OK, .rda kept as-is
   }
 
-}else{
-  # fit_success=FALSE: initial fit errored — start at Stage 2
-  # Stage 2: SMW + offset=TRUE
-  cat("Initial fit errored. Trying Stage 2: SMW + isCovariateOffset=TRUE\n")
-  .fitStage(".stage2", isCovOff=TRUE, usePCG=FALSE)
-  if(.thetaOK(".stage2")){
-    .promote(".stage2")
-    step1_used_offset <- TRUE
-    cat("Stage 2 succeeded\n")
-  } else {
-    .cleanup(".stage2")
+  # Stages 2b/2c: retry with tauInit=c(1,0.1,0) if current tauInit differs
+  if (!solved && !.tau_is_default(tauInit)) {
+    cat("Stage 2 theta OOB. Trying tauInit=1,0.1,0: SMW + isCovariateOffset=FALSE\n")
+    .fitStage(".stage2b", isCovOff=FALSE, usePCG=FALSE, tauInitVal=.tau_default)
+    if (.thetaOK(".stage2b")) {
+      .promote(".stage2b")
+      step1_tau_switched <<- TRUE
+      cat("Stage 2b succeeded\n")
+      solved <- TRUE
+    } else {
+      .cleanup(".stage2b")
+      cat("Stage 2b theta OOB. Trying tauInit=1,0.1,0: SMW + isCovariateOffset=TRUE\n")
+      .fitStage(".stage2c", isCovOff=TRUE, usePCG=FALSE, tauInitVal=.tau_default)
+      if (.thetaOK(".stage2c")) {
+        .promote(".stage2c")
+        step1_used_offset <<- TRUE
+        step1_tau_switched <<- TRUE
+        cat("Stage 2c succeeded\n")
+        solved <- TRUE
+      } else {
+        .cleanup(".stage2c")
+      }
+    }
+  }
+
+  if (!solved) {
     # Stage 3: PCG + offset=FALSE
-    cat("Stage 2 theta OOB. Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
+    cat("Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
     .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE)
-    if(.thetaOK(".stage3")){
+    if (.thetaOK(".stage3")) {
       .promote(".stage3")
-      step1_used_pcg <- TRUE
+      step1_used_pcg <<- TRUE
       cat("Stage 3 succeeded\n")
+      solved <- TRUE
     } else {
       .cleanup(".stage3")
       # Stage 4: PCG + offset=TRUE (final — keep regardless)
       cat("Stage 3 theta OOB. Trying Stage 4: PCG + isCovariateOffset=TRUE\n")
       .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE)
       .promote(".stage4")
-      step1_used_pcg    <- TRUE
-      step1_used_offset <- TRUE
+      step1_used_pcg    <<- TRUE
+      step1_used_offset <<- TRUE
       cat("Stage 4 complete (final fallback)\n")
     }
   }
 }
 
+if (fit_success) {
+
+  if (!opt$isCovariateOffset) {
+    # Stage 1 result is in .rda — check theta
+    if (!.thetaOK("")) {
+      .run_fallback_chain(start_stage=2)
+    }
+    # else: Stage 1 theta OK, .rda kept as-is
+  }
+
+} else {
+  # fit_success=FALSE: initial fit errored — start at Stage 2
+  cat("Initial fit errored. Starting fallback chain at Stage 2\n")
+  .run_fallback_chain(start_stage=2)
+}
+
+# Check whether the final promoted model is still bad after all stages
+step1_all_failed <- !.thetaOK("")
+if (step1_all_failed) {
+  cat("\nWARNING: All 6 fallback stages exhausted — theta still out of bounds.\n")
+}
 
 # ── Report ──────────────────────────────────────────────────────────────────
 
 write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
-                               used_pcg, used_offset, fit_success, opt) {
+                               used_pcg, used_offset, tau_switched,
+                               fit_success, all_failed, opt) {
   dir.create("./report", showWarnings = FALSE, recursive = TRUE)
   report_file <- file.path("./report",
                            paste0(basename(outputPrefix), ".step1_report.txt"))
@@ -923,7 +950,7 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
                sum(theta_vals[2:length(theta_vals)]) <= 0 ||
                sum(theta_vals[2:length(theta_vals)]) > 1
 
-  overall_ok <- fit_success && file.exists(model_file) && converged && !theta_oob
+  overall_ok <- file.exists(model_file) && converged && !theta_oob
   status_str <- if (overall_ok) "SUCCESS" else "FAILURE"
   solver_str <- if (used_pcg) "PCG" else "SMW"
   theta_str  <- if (all(!is.na(theta_vals))) {
@@ -931,7 +958,7 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   } else { "NA" }
 
   writeLines(c(
-    "=== SAIGE-QTL Step 1 Fitting Report ===",
+    "=== SAIGE-QTL Dynamic Step 1 Fitting Report ===",
     paste0("Date              : ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
     paste0("Output prefix     : ", outputPrefix),
     paste0("Phenotype         : ", opt$phenoCol),
@@ -939,7 +966,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     "",
     "--- Convergence ---",
     paste0("Status            : ", status_str),
-    paste0("fit_success       : ", fit_success),
+    if (all_failed) "WARNING           : Gene failed to converge. Output files removed" else NULL,
+    paste0("Stage 1 fit       : ", if (fit_success) "OK" else "failed (fallbacks used)"),
     paste0("converged flag    : ", converged),
     paste0("Theta in bounds   : ", !theta_oob),
     paste0("Final theta       : ", theta_str),
@@ -947,6 +975,7 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     "--- Solver ---",
     paste0("Solver used       : ", solver_str),
     paste0("isCovariateOffset : ", is_cov_offset_final),
+    paste0("tauInit switched  : ", if (tau_switched) "YES (reset to 1,0.1,0)" else "NO"),
     "",
     "--- Output files ---",
     paste0("Model file        : ", model_file,
@@ -962,8 +991,10 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   if (overall_ok) {
     cat("Model file       :", model_file, "\n")
     if (var_ratio_file != "") cat("Var ratio file   :", var_ratio_file, "\n")
+  } else if (all_failed) {
+    cat("Gene failed to converge. Output files removed. Check report for details.\n")
   } else {
-    cat("Step 1 did not converge cleanly. Check report for details.\n")
+    cat("Fallbacks used. Check report for details.\n")
   }
   cat(sprintf("Report saved     : %s\n", report_file))
 
@@ -976,13 +1007,22 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   ))
 }
 
-if (opt$isWriteReport) {
+if (opt$isWriteReport || step1_all_failed) {
   write_step1_report(
     outputPrefix          = opt$outputPrefix,
     outputPrefix_varRatio = opt$outputPrefix_varRatio,
     used_pcg              = step1_used_pcg,
     used_offset           = step1_used_offset,
+    tau_switched          = step1_tau_switched,
     fit_success           = fit_success,
+    all_failed            = step1_all_failed,
     opt                   = opt
   )
+}
+
+if (step1_all_failed) {
+  for (f in c(paste0(opt$outputPrefix, ".rda"),
+              paste0(opt$outputPrefix, ".varianceRatio.txt"),
+              paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt")))
+    if (file.exists(f)) file.remove(f)
 }
