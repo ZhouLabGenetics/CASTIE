@@ -4865,7 +4865,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
                 }
 #endif
             }
-        } else if (g_EMat.n_rows > 0 && tauVec.n_elem >= 3 && tauVec(2) != 0) {
+        } else if (!g_use_PCG && g_EMat.n_rows > 0 && tauVec.n_elem >= 3 && tauVec(2) != 0) {
             // Case 2: E matrix present with non-zero τ[2], use Woodbury formula for low-rank update
             // Debug and fix E matrix dimensions
             int k_raw = g_EMat.n_rows;
