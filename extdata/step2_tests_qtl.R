@@ -1,14 +1,14 @@
 #!/usr/bin/env Rscript
 
-#options(stringsAsFactors=F, scipen = 999)
-options(stringsAsFactors=F)
-library(SAIGEQTL)
+options(stringsAsFactors = FALSE)
 
-BLASctl_installed <- require(RhpcBLASctl)
-library(optparse)
-library(data.table)
-library(methods)
-print(sessionInfo())
+suppressPackageStartupMessages({
+  library(optparse)
+  library(data.table)
+  library(methods)
+})
+
+cat("===== SAIGE-QTL Dynamic step2 wrapper start =====\n")
 
 option_list <- list(
   make_option("--vcfFile", type="character",default="",
@@ -150,15 +150,40 @@ mean, p-value based on traditional score test is returned. Default value is 2.")
   make_option("--is_permute_ginge", type="logical", default=FALSE,
     help="Whether to permute g in gxe"),
   make_option("--permute_ginge_fam_file", type="character", default="",
-    help="Path to permuted FAM file. If provided with --is_permute_ginge=TRUE, uses the permutation order from this FAM file instead of random permutation")
+    help="Path to permuted FAM file. If provided with --is_permute_ginge=TRUE, uses the permutation order from this FAM file instead of random permutation"),
+  make_option("--library", type="character", default="",
+    help="Optional. Path to the library directory where SAIGEQTL is installed")
 )
 
 
+## list of options
 parser <- OptionParser(usage="%prog [options]", option_list=option_list)
-
 args <- parse_args(parser, positional_arguments = 0)
 opt <- args$options
+
+## Load SAIGEQTL with optional library path
+if(opt$library != ""){
+  suppressPackageStartupMessages({
+    library(SAIGEQTL, lib.loc=opt$library)
+  })
+  cat("Loaded SAIGEQTL from library path:", opt$library, "\n")
+} else {
+  suppressPackageStartupMessages({
+    library(SAIGEQTL)
+  })
+  cat("Loaded SAIGEQTL from default library path\n")
+}
+
+print(sessionInfo())
 print(opt)
+
+
+
+
+
+
+
+
 
 
 convertoNumeric = function(x,stringOutput){

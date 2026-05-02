@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
-cat("===== SAIGE-QTL Dynamic wrapper start =====\n")
+cat("===== SAIGE-QTL Dynamic step1 wrapper start =====\n")
 
 
 ## set list of cmd line arguments
