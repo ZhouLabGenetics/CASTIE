@@ -3858,7 +3858,7 @@ bool openOutfile_single(std::string t_traitType, bool t_isImputation, bool isapp
 
 		if(t_isGbyE){
 
-                        OutFile_single << "\tBeta_ge\tseBeta_ge\tpval_ge\tpval_noSPA_ge\tpval_ge_SKAT";
+                        OutFile_single << "\tBeta_ge\tseBeta_ge\tpval_ge\tpval_noSPA_ge\tpval_ge_CCT";
                 }
 
                 OutFile_single << "\n";
