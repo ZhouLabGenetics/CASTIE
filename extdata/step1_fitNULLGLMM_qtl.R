@@ -784,8 +784,10 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 
 .thetaOK <- function(suffix) {
   rda <- paste0(opt$outputPrefix, suffix, ".rda")
-  if (!file.exists(rda)) return(FALSE)
-  e <- new.env(); load(rda, envir = e)
+  if (!file.exists(rda) || file.size(rda) == 0) return(FALSE)
+  e <- new.env()
+  ok <- tryCatch({ load(rda, envir = e); TRUE }, error = function(e) FALSE)
+  if (!ok) return(FALSE)
   m <- e$modglmm; print(m$theta)
   !is.null(m$theta) &&
     !(sum(m$theta[2:length(m$theta)]) <= 0 || sum(m$theta[2:length(m$theta)]) > 1)
