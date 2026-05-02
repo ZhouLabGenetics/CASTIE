@@ -24,6 +24,7 @@ void setAssocTest_GlobalVarsInCPP(std::string t_impute_method,
 void setAssocTest_GlobalVarsInCPP_GbyE(
                                 arma::mat & t_emat,
                                 bool t_isgxe,
+				arma::imat & t_isUseSandwichVarianceMat,
                                 double t_pval_cutoff_for_gxe,
                                 arma::mat & t_XV_gxe,
                                 arma::mat & t_XXVX_inv_gxe,
@@ -143,7 +144,8 @@ void Unified_getMarkerPval_gxe(
                            bool & t_isFirthConverge,
                            bool t_isER,
                            bool t_isnoadjCov,
-                           bool t_isSparseGRM);
+                           bool t_isSparseGRM,
+			   bool t_isswV);
 
 
 

@@ -205,7 +205,7 @@ std::vector<std::ofstream> OutFile_single_vec;
         arma::mat & t_res_gxe,
         arma::mat & t_mu2_gxe,
         arma::mat & t_mu_gxe,
-        arma::mat & t_varWeights_gxe	);
+        arma::mat & t_varWeights_gxe);
 
 
    void set_seed(unsigned int seed);
@@ -466,7 +466,8 @@ void getMarkerPval_gxe(arma::vec & t_GVec,
                                 bool & t_isFirthConverge,
                                 bool t_isER,
                                 bool t_isnoadjCov,
-                                bool t_isSparseGRM);
+                                bool t_isSparseGRM,
+				bool t_isswV);
 
 void getadjGFast_gxe(arma::vec & t_GVec, arma::vec & g, arma::uvec & iIndex);
 

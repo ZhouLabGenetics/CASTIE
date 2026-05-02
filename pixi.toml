@@ -1,7 +1,7 @@
 [workspace]
 channels = ["conda-forge", "bioconda"]
 name = "SAIGEQTL"
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-64"]
 version = "0.3.2"
 
 [tasks]
@@ -12,6 +12,7 @@ install-github-deps = "Rscript -e 'if(!require(remotes)) install.packages(\"remo
 
 [dependencies]
 # System dependencies
+python = "3.11.*"
 boost-cpp = "*"
 cget = "*"
 openblas = "*"

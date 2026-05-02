@@ -140,7 +140,7 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     useSparseGRMforVarRatio <- FALSE
     LOCO <- FALSE
     #nThreads <- 1
-    cat("No GRM will be used to fit the NULL model and nThreads is set to 1\n")
+    #cat("No GRM will be used to fit the NULL model and nThreads is set to 1\n")
   }
 
 
@@ -365,6 +365,7 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
 
       file.remove(paste0(outputPrefix, "_", phenoCol, "_colnames_subset_temp"))
       file.remove(paste0(outputPrefix, "_", phenoCol, "_lineNum_temp"))
+      file.remove(phenoFiletemp)
       #file.remove(paste0(outputPrefix, "_", phenoCol, "_subcols_temp"))
     } else { # !isphenoFileLarge
 
@@ -565,6 +566,11 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     #print("HERE set_EMat")
     #eMat = preprocess_E(eMat)
     set_EMat(eMat) 
+    
+    eMatcolNames <- checkColList[checkColList %in% eCovarCol]
+    eMatIsSample <- eMatcolNames %in% sampleCovarCol
+    
+    
     ##remove e cov from the covariates list
     #print("Here covarColList 0 ")
     #print(covarColList)
@@ -1183,6 +1189,12 @@ if(is.null(eMat)){
     if (length(eCovarCol) > 0) {
       cat(eCovarCol, "are environmental covariates\n")
       modglmm$eMat = eMat
+      eMatcolNames = checkColList[checkColList %in% eCovarCol]
+      eMatIsSample = eMatcolNames %in% sampleCovarCol
+      modglmm$eMatcolNames = eMatcolNames
+      modglmm$eMatIsSample = eMatIsSample
+      
+      
       #modglmm$eMat <- data.new[, which(colnames(data.new) %in% eCovarCol), drop = F]
       #for (em in 1:ncol(modglmm$eMat)) {
       #  modglmm$eMat[, em] <- (modglmm$eMat[, em] - mean(modglmm$eMat[, em])) / (sd(modglmm$eMat[, em]))
@@ -1477,7 +1489,7 @@ if(is.null(eMat)){
     }
     cat("Start estimating variance ratios\n")
     load(modelOut)
-    extractVarianceRatio_multiV(
+    use_sandwich = extractVarianceRatio_multiV(
       obj.glmm.null = modglmm,
       obj.glm.null = fit0, maxiterPCG = maxiterPCG,
       tolPCG = tolPCG, numMarkers = numMarkersForVarRatio, varRatioOutFile = varRatioFile,
@@ -1495,10 +1507,11 @@ if(is.null(eMat)){
       includeNonautoMarkersforVarRatio = includeNonautoMarkersforVarRatio, isStoreSigma = isStoreSigma, useGRMtoFitNULL = useGRMtoFitNULL
     )
   } else {
+    use_sandwich = NULL
     cat("Skip estimating variance ratios\n")
   }
   closeGenoFile_plink()
-
+  modglmm$use_sandwich = use_sandwich
   # clean up saved model (as in ReadModel)
   if (isShrinkModelOutput) {
     load(modelOut)
@@ -1517,8 +1530,8 @@ if(is.null(eMat)){
         modglmm$obj.noK$XVX_inv_XV <- NULL
       }
     }
-    save(modglmm, file = modelOut)
   }
+  save(modglmm, file = modelOut)
 }
 
 
@@ -1742,6 +1755,11 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
         varRatio_NULL_eg_vec <- NULL
         varRatio_sparse_eg_mat <- NULL
         varRatio_sparse_eg_vec <- NULL
+	varModel_egcondg_mat <- NULL
+	#varModel_egcondg_vec <- NULL
+	varSW_egcondg_mat <- NULL
+	varSWtoModel_egcondg_mat <- NULL
+	#varSW_egcondg_vec <- NULL
       }
 
       indexInMarkerList <- 1
@@ -1845,9 +1863,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
             if (!is.null(obj.glmm.null$eMat)) {
               var1GE_vec <- NULL
+              varSWGEcond_vec <- NULL
+              varModelGEcond_vec <- NULL
               var2sparseGE_vec <- NULL
               getildeMat <- NULL
               getilde_sample0_Mat <- NULL
+	      n_donors <- ncol(I_mat)		
+	      S_cell = G * (obj.glmm.null$residuals * var_weights) 
+  	      S_donor <- as.numeric(t(I_mat) %*% S_cell)      # donor contributions to U_G
               for (ne in 1:ncol(obj.glmm.null$eMat)) {
                 evec <- obj.glmm.null$eMat[, ne]
 
@@ -1876,12 +1899,30 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
                 Sigma_iGE <- getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
                 var1GE <- t(GE_tilde) %*% Sigma_iGE - t(GE_tilde) %*% Sigma_iX %*% (solve(t(X) %*% Sigma_iX)) %*% t(X) %*% Sigma_iGE
-                var1GE_vec <- c(var1GE_vec, var1GE)
-                S_GE <- innerProduct(GE_tilde, obj.glmm.null$residuals * var_weights)
+		var1GE_vec <- c(var1GE_vec, var1GE)
+		S_GE <- innerProduct(GE_tilde, obj.glmm.null$residuals * var_weights)
                 p_exact_GE <- pchisq(S_GE^2 / var1GE, df = 1, lower.tail = F)
                 cat("p_exact_GE ", p_exact_GE, "\n")
                 cat("S_GE ", S_GE, "\n")
                 cat("var1GE ", var1GE, "\n")
+                
+		# Donor-level contributions
+		I_11 <- var1
+		I_22 <- var1GE
+		I_21 <- t(GE_tilde) %*% Sigma_iG - t(GE_tilde) %*% Sigma_iX %*% (solve(t(X) %*% Sigma_iX)) %*% t(X) %*% Sigma_iG
+		varGEcondG_model <- I_22 - I_21^2 / I_11	
+  		c_coeff <- I_21 / I_11
+  		# Donor-level contributions
+		S_GE_cell = GE_tilde * (obj.glmm.null$residuals * var_weights)
+  		R_donor <- as.numeric(t(I_mat) %*% S_GE_cell)     
+  		Q_donor <- R_donor - c_coeff * S_donor
+  		T_cond_donor <- sum(Q_donor)
+  
+  		# Centered sandwich with HC1
+  		Q_donor_bar <- T_cond_donor / n_donors
+  		varGEcondG_SW <- sum((Q_donor - Q_donor_bar)^2) * n_donors / (n_donors - ncol(Sigma_iX))	
+                varSWGEcond_vec <- c(varSWGEcond_vec, varGEcondG_SW)
+		varModelGEcond_vec <- c(varModelGEcond_vec, varGEcondG_model)
 
                 # I_mat_e = I_mat * evec
                 # GE_sample = as.vector(t(G0) %*% I_mat_e)
@@ -2037,7 +2078,10 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             if (!is.null(obj.glmm.null$eMat)) {
               varRatio_NULL_eg_mat <- rbind(varRatio_NULL_eg_mat, var1GE_vec / var2nullGE_vec)
               varRatio_sparse_eg_mat <- rbind(varRatio_sparse_eg_mat, var1GE_vec / var2sparseGE_vec)
-            }
+               varModel_egcondg_mat = rbind(varModel_egcondg_mat, varModelGEcond_vec)
+	       varSW_egcondg_mat = rbind(varSW_egcondg_mat, varSWGEcond_vec)
+	    
+	    }
             # indexInMarkerList = indexInMarkerList + 1
             numTestedMarker <- numTestedMarker + 1
           } else {
@@ -2117,8 +2161,26 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
     }
   } # for(k in 1:length(listOfMarkersForVarRatio)){
   write.table(varRatioTable, varRatioOutFile, quote = F, col.names = F, row.names = F)
+  
+  if (!is.null(obj.glmm.null$eMat)) {
+    #write.table(varModel_egcondg_mat, paste0(varRatioOutFile, ".varModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    #write.table(varSW_egcondg_mat, paste0(varRatioOutFile, ".varSW_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    varSWtoModel_egcondg_mat = varSW_egcondg_mat/varModel_egcondg_mat
+    #write.table(varSWtoModel_egcondg_mat, paste0(varRatioOutFile, ".varSWtoModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    ##threshold
+    threshold = 1 + 2 * sqrt(2 / n_donors)
+    median_ratios = apply(varSWtoModel_egcondg_mat, 2, median, na.rm = TRUE)
+    use_sandwich = median_ratios > threshold 
+    #for donor level context, do not use sandwich variance
+    use_sandwich[obj.glmm.null$eMatIsSample] = FALSE 
+    #obj.glmm.null$use_sandwich = use_sandwich
+    #modglmm = obj.glmm.null
+    #save(modglmm)  
+}
+
   data <- read.table(varRatioOutFile, header = F)
   print(data)
+  return(use_sandwich)
 }
 
 

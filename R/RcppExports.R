@@ -25,24 +25,16 @@ setAssocTest_GlobalVarsInCPP <- function(t_impute_method, t_missing_cutoff, t_mi
     invisible(.Call('_SAIGEQTL_setAssocTest_GlobalVarsInCPP', PACKAGE = 'SAIGEQTL', t_impute_method, t_missing_cutoff, t_min_maf_marker, t_min_mac_marker, t_min_info_marker, t_dosage_zerod_cutoff, t_dosage_zerod_MAC_cutoff, t_outputFilePrefix, t_MACCutoffforER))
 }
 
-setAssocTest_GlobalVarsInCPP_GbyE <- function(t_emat, t_isgxe, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge) {
-    invisible(.Call('_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE', PACKAGE = 'SAIGEQTL', t_emat, t_isgxe, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge))
-}
-
-set_usePCG <- function(usePCG) {
-    invisible(.Call('_SAIGEQTL_set_usePCG', PACKAGE = 'SAIGEQTL', usePCG))
-}
-
-set_permute_ginge_indices <- function(sample_ids) {
-    invisible(.Call('_SAIGEQTL_set_permute_ginge_indices', PACKAGE = 'SAIGEQTL', sample_ids))
-}
-
-set_permute_ginge_indices_direct <- function(indices) {
-    invisible(.Call('_SAIGEQTL_set_permute_ginge_indices_direct', PACKAGE = 'SAIGEQTL', indices))
+setAssocTest_GlobalVarsInCPP_GbyE <- function(t_emat, t_isgxe, t_isUseSandwichVarianceMat, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge) {
+    invisible(.Call('_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE', PACKAGE = 'SAIGEQTL', t_emat, t_isgxe, t_isUseSandwichVarianceMat, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge))
 }
 
 setMarker_GlobalVarsInCPP <- function(t_isOutputMoreDetails, t_marker_chunksize) {
     invisible(.Call('_SAIGEQTL_setMarker_GlobalVarsInCPP', PACKAGE = 'SAIGEQTL', t_isOutputMoreDetails, t_marker_chunksize))
+}
+
+set_usePCG <- function(usePCG) {
+    invisible(.Call('_SAIGEQTL_set_usePCG', PACKAGE = 'SAIGEQTL', usePCG))
 }
 
 setRegion_GlobalVarsInCPP <- function(t_max_maf_region, t_max_markers_region, t_MACCutoff_to_CollapseUltraRare, t_min_gourpmac_for_burdenonly) {
@@ -207,6 +199,14 @@ getPCG1ofSigmaAndVector_multiV <- function(wVec, tauVec, bVec, maxiterPCG, tolPC
 
 set_seed <- function(seed) {
     invisible(.Call('_SAIGEQTL_set_seed', PACKAGE = 'SAIGEQTL', seed))
+}
+
+set_permute_ginge_indices <- function(sample_ids) {
+    invisible(.Call('_SAIGEQTL_set_permute_ginge_indices', PACKAGE = 'SAIGEQTL', sample_ids))
+}
+
+set_permute_ginge_indices_direct <- function(indices) {
+    invisible(.Call('_SAIGEQTL_set_permute_ginge_indices_direct', PACKAGE = 'SAIGEQTL', indices))
 }
 
 nb <- function(n) {

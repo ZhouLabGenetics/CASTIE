@@ -403,6 +403,7 @@ SPAGMMATtest <- function(bgenFile = "",
   # print(length(unique(obj.model$sampleID)))
   eMat <- NULL
   isgxe_vec <- NULL
+  isUseSandwichVarianceMat_gxe <- NULL
   for (oml in 1:length(obj.model.List)) {
     # print("dim(I_mat)")
     # print(dim(I_mat))
@@ -411,6 +412,12 @@ SPAGMMATtest <- function(bgenFile = "",
     # eMat = cbind(eMat, t(I_mat)%*%(obj.model.List[[oml]]$eMat))
     eMat <- cbind(eMat, (obj.model.List[[oml]]$eMat))
     isgxe_vec <- c(isgxe_vec, obj.model.List[[oml]]$isgxe)
+    if(!is.null(obj.model.List[[1]]$use_sandwich)){
+     isUseSandwichVarianceMat_gxe = rbind(isUseSandwichVarianceMat_gxe, as.integer(obj.model.List[[oml]]$use_sandwich))
+    }else{
+     use_sandwichvec = rep(0, ncol(obj.model.List[[1]]$eMat))
+     isUseSandwichVarianceMat_gxe = rbind(isUseSandwichVarianceMat_gxe, use_sandwichvec)
+    }
   }
 
   if (sum(isgxe_vec) != 0 && sum(isgxe_vec) != length(isgxe_vec)) {
@@ -909,7 +916,7 @@ SPAGMMATtest <- function(bgenFile = "",
     set_permute_ginge_indices_direct(permute_indices_0based)
   }
 
-  setAssocTest_GlobalVarsInCPP_GbyE(eMat, isgxe_vec[1], as.numeric(pval_cutoff_for_gxe), XV_gxe, XXVX_inv_gxe, y_gxe, res_gxe, mu2_gxe, mu_gxe, varWeights_gxe,is_permute_e,is_permute_ginge)
+  setAssocTest_GlobalVarsInCPP_GbyE(eMat, isgxe_vec[1], isUseSandwichVarianceMat_gxe, as.numeric(pval_cutoff_for_gxe), XV_gxe, XXVX_inv_gxe, y_gxe, res_gxe, mu2_gxe, mu_gxe, varWeights_gxe,is_permute_e,is_permute_ginge)
 
   # process condition
   if (isCondition) {

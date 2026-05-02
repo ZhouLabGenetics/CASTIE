@@ -2217,7 +2217,8 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
                                 bool & t_isFirthConverge,
                                 bool t_isER,
                                 bool t_isnoadjCov,
-                                bool t_isSparseGRM){
+                                bool t_isSparseGRM, 
+				bool t_isswV){
 
   std::string t_pval_str;
   double t_var2, t_SPApval;
@@ -2264,7 +2265,7 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
 //std::cout << "here is_gtilde 6" << std::endl;
 
 	// Sandwich variance: cluster by donor, take max with model-based variance
-	if(g_I_longl_mat.n_cols > 0) {
+	if(g_I_longl_mat.n_cols > 0 && t_isswV) {
 	    arma::vec c_coeff_vec = m_VarInvMat_cond.cols(m_startic, m_endic) *
 	                            m_Tstat_cond.subvec(m_startic, m_endic);
 	    arma::vec P2G_c = m_P2Mat_cond.cols(m_startic, m_endic) * c_coeff_vec;
@@ -2286,7 +2287,7 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
 	    if(n_donors > m_p_gxe){
 	        var_sandwich *= (double)n_donors / (double)(n_donors - m_p_gxe);
 	    }
-	    t_varT_c = std::max(t_varT_c, var_sandwich);
+	    t_varT_c = var_sandwich;
 	}
 
     double S_c = t_Tstat_c;

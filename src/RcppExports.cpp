@@ -100,12 +100,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // setAssocTest_GlobalVarsInCPP_GbyE
-void setAssocTest_GlobalVarsInCPP_GbyE(arma::mat& t_emat, bool t_isgxe, double t_pval_cutoff_for_gxe, arma::mat& t_XV_gxe, arma::mat& t_XXVX_inv_gxe, arma::mat& t_y_gxe, arma::mat& t_res_gxe, arma::mat& t_mu2_gxe, arma::mat& t_mu_gxe, arma::mat& t_varWeights_gxe, bool t_is_permute_e, bool t_is_permute_ginge);
-RcppExport SEXP _SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE(SEXP t_ematSEXP, SEXP t_isgxeSEXP, SEXP t_pval_cutoff_for_gxeSEXP, SEXP t_XV_gxeSEXP, SEXP t_XXVX_inv_gxeSEXP, SEXP t_y_gxeSEXP, SEXP t_res_gxeSEXP, SEXP t_mu2_gxeSEXP, SEXP t_mu_gxeSEXP, SEXP t_varWeights_gxeSEXP, SEXP t_is_permute_eSEXP, SEXP t_is_permute_gingeSEXP) {
+void setAssocTest_GlobalVarsInCPP_GbyE(arma::mat& t_emat, bool t_isgxe, arma::imat& t_isUseSandwichVarianceMat, double t_pval_cutoff_for_gxe, arma::mat& t_XV_gxe, arma::mat& t_XXVX_inv_gxe, arma::mat& t_y_gxe, arma::mat& t_res_gxe, arma::mat& t_mu2_gxe, arma::mat& t_mu_gxe, arma::mat& t_varWeights_gxe, bool t_is_permute_e, bool t_is_permute_ginge);
+RcppExport SEXP _SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE(SEXP t_ematSEXP, SEXP t_isgxeSEXP, SEXP t_isUseSandwichVarianceMatSEXP, SEXP t_pval_cutoff_for_gxeSEXP, SEXP t_XV_gxeSEXP, SEXP t_XXVX_inv_gxeSEXP, SEXP t_y_gxeSEXP, SEXP t_res_gxeSEXP, SEXP t_mu2_gxeSEXP, SEXP t_mu_gxeSEXP, SEXP t_varWeights_gxeSEXP, SEXP t_is_permute_eSEXP, SEXP t_is_permute_gingeSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< arma::mat& >::type t_emat(t_ematSEXP);
     Rcpp::traits::input_parameter< bool >::type t_isgxe(t_isgxeSEXP);
+    Rcpp::traits::input_parameter< arma::imat& >::type t_isUseSandwichVarianceMat(t_isUseSandwichVarianceMatSEXP);
     Rcpp::traits::input_parameter< double >::type t_pval_cutoff_for_gxe(t_pval_cutoff_for_gxeSEXP);
     Rcpp::traits::input_parameter< arma::mat& >::type t_XV_gxe(t_XV_gxeSEXP);
     Rcpp::traits::input_parameter< arma::mat& >::type t_XXVX_inv_gxe(t_XXVX_inv_gxeSEXP);
@@ -116,7 +117,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< arma::mat& >::type t_varWeights_gxe(t_varWeights_gxeSEXP);
     Rcpp::traits::input_parameter< bool >::type t_is_permute_e(t_is_permute_eSEXP);
     Rcpp::traits::input_parameter< bool >::type t_is_permute_ginge(t_is_permute_gingeSEXP);
-    setAssocTest_GlobalVarsInCPP_GbyE(t_emat, t_isgxe, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge);
+    setAssocTest_GlobalVarsInCPP_GbyE(t_emat, t_isgxe, t_isUseSandwichVarianceMat, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge);
     return R_NilValue;
 END_RCPP
 }
@@ -128,6 +129,16 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type t_isOutputMoreDetails(t_isOutputMoreDetailsSEXP);
     Rcpp::traits::input_parameter< int >::type t_marker_chunksize(t_marker_chunksizeSEXP);
     setMarker_GlobalVarsInCPP(t_isOutputMoreDetails, t_marker_chunksize);
+    return R_NilValue;
+END_RCPP
+}
+// set_usePCG
+void set_usePCG(bool usePCG);
+RcppExport SEXP _SAIGEQTL_set_usePCG(SEXP usePCGSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< bool >::type usePCG(usePCGSEXP);
+    set_usePCG(usePCG);
     return R_NilValue;
 END_RCPP
 }
@@ -502,16 +513,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// set_usePCG
-void set_usePCG(bool usePCG);
-RcppExport SEXP _SAIGEQTL_set_usePCG(SEXP usePCGSEXP) {
-BEGIN_RCPP
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< bool >::type usePCG(usePCGSEXP);
-    set_usePCG(usePCG);
-    return R_NilValue;
-END_RCPP
-}
 // set_flagSparseGRM_cur_SAIGE
 void set_flagSparseGRM_cur_SAIGE(bool t_flagSparseGRM_cur);
 RcppExport SEXP _SAIGEQTL_set_flagSparseGRM_cur_SAIGE(SEXP t_flagSparseGRM_curSEXP) {
@@ -700,7 +701,6 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-
 // set_permute_ginge_indices
 void set_permute_ginge_indices(std::vector<std::string> sample_ids);
 RcppExport SEXP _SAIGEQTL_set_permute_ginge_indices(SEXP sample_idsSEXP) {
@@ -711,7 +711,6 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-
 // set_permute_ginge_indices_direct
 void set_permute_ginge_indices_direct(arma::ivec indices);
 RcppExport SEXP _SAIGEQTL_set_permute_ginge_indices_direct(SEXP indicesSEXP) {
@@ -722,7 +721,6 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-
 // nb
 Rcpp::NumericVector nb(int n);
 RcppExport SEXP _SAIGEQTL_nb(SEXP nSEXP) {
@@ -2569,8 +2567,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_SAIGEQTL_openOutfile_single_LDmat", (DL_FUNC) &_SAIGEQTL_openOutfile_single_LDmat, 1},
     {"_SAIGEQTL_closeOutfile_single_LDmat", (DL_FUNC) &_SAIGEQTL_closeOutfile_single_LDmat, 0},
     {"_SAIGEQTL_setAssocTest_GlobalVarsInCPP", (DL_FUNC) &_SAIGEQTL_setAssocTest_GlobalVarsInCPP, 9},
-    {"_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE", (DL_FUNC) &_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE, 12},
+    {"_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE", (DL_FUNC) &_SAIGEQTL_setAssocTest_GlobalVarsInCPP_GbyE, 13},
     {"_SAIGEQTL_setMarker_GlobalVarsInCPP", (DL_FUNC) &_SAIGEQTL_setMarker_GlobalVarsInCPP, 2},
+    {"_SAIGEQTL_set_usePCG", (DL_FUNC) &_SAIGEQTL_set_usePCG, 1},
     {"_SAIGEQTL_setRegion_GlobalVarsInCPP", (DL_FUNC) &_SAIGEQTL_setRegion_GlobalVarsInCPP, 4},
     {"_SAIGEQTL_mainMarkerInCPP", (DL_FUNC) &_SAIGEQTL_mainMarkerInCPP, 7},
     {"_SAIGEQTL_Unified_getSampleSizeinGeno", (DL_FUNC) &_SAIGEQTL_Unified_getSampleSizeinGeno, 1},
@@ -2595,7 +2594,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_SAIGEQTL_removeOutfile_inGroup", (DL_FUNC) &_SAIGEQTL_removeOutfile_inGroup, 0},
     {"_SAIGEQTL_removeOutfile_inSingle", (DL_FUNC) &_SAIGEQTL_removeOutfile_inSingle, 0},
     {"_SAIGEQTL_openOutfile_single", (DL_FUNC) &_SAIGEQTL_openOutfile_single, 5},
-    {"_SAIGEQTL_set_usePCG", (DL_FUNC) &_SAIGEQTL_set_usePCG, 1},
     {"_SAIGEQTL_set_flagSparseGRM_cur_SAIGE", (DL_FUNC) &_SAIGEQTL_set_flagSparseGRM_cur_SAIGE, 1},
     {"_SAIGEQTL_set_flagSparseGRM_cur_SAIGE_org", (DL_FUNC) &_SAIGEQTL_set_flagSparseGRM_cur_SAIGE_org, 0},
     {"_SAIGEQTL_copy_singleInGroup", (DL_FUNC) &_SAIGEQTL_copy_singleInGroup, 0},
