@@ -161,6 +161,13 @@ parser <- OptionParser(usage="%prog [options]", option_list=option_list)
 args <- parse_args(parser, positional_arguments = 0)
 opt <- args$options
 
+## Fix: empty-string values for logical options (happens when shell vars are unset)
+for (o in option_list) {
+  if (identical(o@type, "logical") && identical(opt[[o@dest]], "")) {
+    opt[[o@dest]] <- if (!is.null(o@default)) o@default else FALSE
+  }
+}
+
 ## Load SAIGEQTL with optional library path
 if(opt$library != ""){
   suppressPackageStartupMessages({
@@ -173,6 +180,8 @@ if(opt$library != ""){
   })
   cat("Loaded SAIGEQTL from default library path\n")
 }
+
+BLASctl_installed <- require(RhpcBLASctl)
 
 print(sessionInfo())
 print(opt)
