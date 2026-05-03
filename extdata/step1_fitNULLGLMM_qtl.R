@@ -137,7 +137,7 @@ option_list <- list(
   make_option("--usePCG", type="logical", default=FALSE,
    help="Optional. Whether to force PCG (Case 3) solver for null model fitting. Automatically set to TRUE when variance components are out of bounds. [default, 'FALSE']"),
   make_option("--isWriteReport", type="logical", default=FALSE,
-   help="Optional. Whether to save a fitting report (solver used, convergence, offset flag) to ./report/. [default, 'FALSE']"),
+   help="Optional. Whether to save a fitting report (solver used, convergence, offset flag) to a report/ subdirectory next to outputPrefix. [default, 'FALSE']"),
   make_option("--initialSubSampleProp",
   type="numeric", default=1,
       help="Optional. The proportion of subsamples used for estimate the inital values for variance covariance parameters"),
@@ -927,8 +927,9 @@ if (step1_all_failed) {
 write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
                                used_pcg, used_offset, tau_switched,
                                fit_success, all_failed, opt) {
-  dir.create("./report", showWarnings = FALSE, recursive = TRUE)
-  report_file <- file.path("./report",
+  report_dir <- file.path(dirname(outputPrefix), "report")
+  dir.create(report_dir, showWarnings = FALSE, recursive = TRUE)
+  report_file <- file.path(report_dir,
                            paste0(basename(outputPrefix), ".step1_report.txt"))
 
   model_file <- paste0(outputPrefix, ".rda")
