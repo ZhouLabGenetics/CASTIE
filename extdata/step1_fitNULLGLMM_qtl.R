@@ -945,6 +945,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   theta_vals          <- NA
   converged           <- FALSE
   is_cov_offset_final <- used_offset
+  use_sandwich        <- NULL
+  emat_col_names      <- NULL
   if (file.exists(model_file)) {
     tmp_env <- new.env()
     load(model_file, envir = tmp_env)
@@ -952,6 +954,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     theta_vals <- m$theta
     converged  <- isTRUE(m$converged)
     if (!is.null(m$isCovariateOffset)) is_cov_offset_final <- m$isCovariateOffset
+    use_sandwich   <- m$use_sandwich
+    emat_col_names <- m$eMatcolNames
   }
 
   theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
@@ -984,6 +988,9 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     paste0("Solver used       : ", solver_str),
     paste0("isCovariateOffset : ", is_cov_offset_final),
     paste0("tauInit switched  : ", if (tau_switched) "YES (reset to 1,0.1,0)" else "NO"),
+    "",
+    "--- Sandwich variance ---",
+    paste0("Sandwich used     : ", if (!is.null(use_sandwich)) paste(use_sandwich, collapse = ", ") else "NA"),
     "",
     "--- Output files ---",
     paste0("Model file        : ", model_file,

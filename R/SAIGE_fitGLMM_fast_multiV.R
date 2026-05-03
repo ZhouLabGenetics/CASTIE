@@ -1511,10 +1511,10 @@ if(is.null(eMat)){
     cat("Skip estimating variance ratios\n")
   }
   closeGenoFile_plink()
-  modglmm$use_sandwich = use_sandwich
   # clean up saved model (as in ReadModel)
   if (isShrinkModelOutput) {
     load(modelOut)
+    modglmm$use_sandwich = use_sandwich
     modglmm$Y <- NULL
     modglmm$linear.predictors <- NULL
     modglmm$coefficients <- NULL
@@ -1530,6 +1530,8 @@ if(is.null(eMat)){
         modglmm$obj.noK$XVX_inv_XV <- NULL
       }
     }
+  } else {
+    modglmm$use_sandwich = use_sandwich
   }
   save(modglmm, file = modelOut)
 }
@@ -2170,12 +2172,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
     ##threshold
     threshold = 1 + 2 * sqrt(2 / n_donors)
     median_ratios = apply(varSWtoModel_egcondg_mat, 2, median, na.rm = TRUE)
-    use_sandwich = median_ratios > threshold 
+    cat("threshold for using sandwich variance:", threshold, "\n")
+    cat("median sandwich/model variance ratios per context:\n")
+    print(median_ratios)
+    use_sandwich = median_ratios > threshold
     #for donor level context, do not use sandwich variance
-    use_sandwich[obj.glmm.null$eMatIsSample] = FALSE 
-    #obj.glmm.null$use_sandwich = use_sandwich
-    #modglmm = obj.glmm.null
-    #save(modglmm)  
+    use_sandwich[obj.glmm.null$eMatIsSample] = FALSE
+    cat("use_sandwich per context:\n")
+    print(use_sandwich)
 }
 
   data <- read.table(varRatioOutFile, header = F)
