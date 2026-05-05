@@ -1412,6 +1412,13 @@ if(is.null(eMat)){
       save(modglmm, file = modelOut)
     }
 
+  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 || (!modglmm$isCovariateOffset && any(modglmm$theta[2:length(modglmm$theta)] == 0))){
+
+	cat(modglmm$theta)
+	stop("Tau estimates out of bound: possible model divergence")
+  } 
+    
+
 
     t_end <- proc.time()
     print(t_end)

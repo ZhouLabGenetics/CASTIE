@@ -4796,7 +4796,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
     int Nnomissing = wVec.n_elem;
     arma::fvec xVec(Nnomissing);
     xVec.zeros();
-    std::cout << "g_isStoreSigma " << g_isStoreSigma << std::endl;
+    //std::cout << "g_isStoreSigma " << g_isStoreSigma << std::endl;
     //std::cout << "Nnomissing " << Nnomissing << std::endl;
     if(g_isStoreSigma){
         //std::cout << " arma::spsolve(g_spSigma, bVec) 0" << std::endl;
@@ -4873,8 +4873,8 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
             // Debug and fix E matrix dimensions
             int k_raw = g_EMat.n_rows;
             int k_cols = g_EMat.n_cols;
-            std::cout << "Debug: E matrix raw dimensions: " << k_raw << " x " << k_cols << " (should be k x N)" << std::endl;
-            std::cout << "Debug: N (Nnomissing): " << Nnomissing << std::endl;
+            //std::cout << "Debug: E matrix raw dimensions: " << k_raw << " x " << k_cols << " (should be k x N)" << std::endl;
+            //std::cout << "Debug: N (Nnomissing): " << Nnomissing << std::endl;
             
             // Detect if E matrix is transposed and fix it
             int k;
@@ -4883,12 +4883,12 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
                 // Correct orientation: k × N
                 k = k_raw;
                 E_corrected = g_EMat;
-                std::cout << "E matrix has correct orientation: " << k << " covariates x " << Nnomissing << " cells" << std::endl;
+                //std::cout << "E matrix has correct orientation: " << k << " covariates x " << Nnomissing << " cells" << std::endl;
             } else if (k_raw == Nnomissing) {
                 // Transposed: N × k, need to transpose
                 k = k_cols;
                 E_corrected = g_EMat.t();  // Transpose to get k × N
-                std::cout << "E matrix was transposed! Corrected to: " << k << " covariates x " << Nnomissing << " cells" << std::endl;
+                //std::cout << "E matrix was transposed! Corrected to: " << k << " covariates x " << Nnomissing << " cells" << std::endl;
             } else {
                 // Neither dimension matches - this is an error
                 Rcpp::stop("E matrix dimensions don't match expected. Raw: %d x %d, Expected: k x %d or %d x k", 
@@ -4897,7 +4897,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
             
             double memory_factor = static_cast<double>(k) * static_cast<double>(Nnomissing);
             double memory_mb = memory_factor * 4 * 3 / (1024 * 1024);  // 3 matrices, 4 bytes per float
-            std::cout << "Debug: Required memory for global Woodbury: " << memory_mb << " MB" << std::endl;
+            //std::cout << "Debug: Required memory for global Woodbury: " << memory_mb << " MB" << std::endl;
             
             // Use more sophisticated memory strategy
             bool use_global_woodbury = (memory_mb < 500);  // 500MB threshold
@@ -5014,7 +5014,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
                 xVec = x_current;
                 std::cout << "Completed streaming Woodbury with " << k << " rank-1 updates" << std::endl;
             } else if (use_global_woodbury) {
-                std::cout << "Using global Woodbury optimization (memory=" << memory_mb << " MB)" << std::endl;
+                //std::cout << "Using global Woodbury optimization (memory=" << memory_mb << " MB)" << std::endl;
                 // ... (original global Woodbury code would go here, but it's been replaced)
                 // For now, fall through to individual-level approach
                 use_individual_woodbury = true;
@@ -5023,7 +5023,7 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
             if (use_individual_woodbury) {
                 // Proceed with individual-level Woodbury optimization
                 // Process each individual separately to minimize memory usage
-                std::cout << "Using individual-level Woodbury optimization (k=" << k << ", N=" << Nnomissing << ")" << std::endl;
+                //std::cout << "Using individual-level Woodbury optimization (k=" << k << ", N=" << Nnomissing << ")" << std::endl;
                 
                 auto n_individuals = g_I_start_indices.n_elem - 1;
                 bool use_parallel = (g_omp_num_threads > 1) && (n_individuals > 100);
