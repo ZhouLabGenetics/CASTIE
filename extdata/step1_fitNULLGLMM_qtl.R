@@ -428,7 +428,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
   print(modglmm$theta)
 
 if(!opt$isCovariateOffset){
-  if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
+  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || any(modglmm$theta[2:length(modglmm$theta)] == 0) || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
         cat("Theta out of bounds, trying PCG solver first...\n")
         pcg_success <- tryCatch({
           set_usePCG(TRUE)
@@ -510,8 +510,8 @@ if(!opt$isCovariateOffset){
           modglmm_pcg = my_env_pcg$modglmm
           print(modglmm_pcg$theta)
           if(!is.null(modglmm_pcg$theta) &&
-             !(sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) <= 0 ||
-               sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) > 1)){
+             !(sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) < 0 ||
+               sum(modglmm_pcg$theta[2:length(modglmm_pcg$theta)]) > 10  )){
             file.rename(paste0(outputprefixsubset, ".pcg.rda"), paste0(outputprefixsubset, ".rda"))
             tauVec = modglmm_pcg$theta
             tauTable = rbind(tauTable, tauVec)
@@ -594,8 +594,8 @@ if(!opt$isCovariateOffset){
           load(paste0(outputprefixsubset, ".offset.rda"), envir = my_env)
           modglmm = my_env$modglmm
           print(modglmm$theta)
-          if(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1){
-            cat("All variance component parameter estiamtes are out of bounds.\n")
+          if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 ){
+	    cat("All variance component parameter estiamtes are out of bounds.\n")
             file.remove(paste0(outputprefixsubset, ".offset.rda"))
             if (file.exists(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))) {
               file.remove(paste0(outputprefixsubset, ".offset.varianceRatio.txt"))
@@ -625,7 +625,7 @@ if(!opt$isCovariateOffset){
   }
 }else{
 
-  if(!(sum(modglmm$theta[2:length(modglmm$theta)]) <= 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 1)){
+  if(!(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10)){
 	tauVec = modglmm$theta
 	tauTable = rbind(tauTable, tauVec)
   }
@@ -732,7 +732,6 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 })
 
 
-# ── Helper functions for the 4-stage fallback ──────────────────────────────
 .fitStage <- function(suffix, isCovOff, usePCG, tauInitVal = tauInit) {
   if (usePCG) set_usePCG(TRUE)
   set.seed(1)
@@ -798,7 +797,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
   if (!ok) return(FALSE)
   m <- e$modglmm; print(m$theta)
   !is.null(m$theta) &&
-    !(sum(m$theta[2:length(m$theta)]) <= 0 || sum(m$theta[2:length(m$theta)]) > 1)
+    !(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) && any(m$theta[2:length(m$theta)] == 0))
 }
 
 .promote <- function(suffix) {
@@ -823,7 +822,6 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
     if (file.exists(f)) file.remove(f)
 }
 
-# ── 6-stage fallback ─────────────────────────────────────────────────────────
 # Stage 1: SMW + isCovariateOffset=FALSE  (initial fit, already done)
 # Stage 2: SMW + isCovariateOffset=TRUE
 # Stage 2b: SMW + isCovariateOffset=FALSE + tauInit=c(1,0.1,0)  (if tauInit ≠ c(1,0.1,0))
@@ -881,7 +879,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
   if (!solved) {
     # Stage 3: PCG + offset=FALSE
     cat("Trying Stage 3: PCG + isCovariateOffset=FALSE\n")
-    .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE)
+    .fitStage(".stage3", isCovOff=FALSE, usePCG=TRUE, tauInitVal=.tau_default)
     if (.thetaOK(".stage3")) {
       .promote(".stage3")
       step1_used_pcg <<- TRUE
@@ -891,7 +889,7 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
       .cleanup(".stage3")
       # Stage 4: PCG + offset=TRUE (final — keep regardless)
       cat("Stage 3 theta OOB. Trying Stage 4: PCG + isCovariateOffset=TRUE\n")
-      .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE)
+      .fitStage(".stage4", isCovOff=TRUE, usePCG=TRUE, tauInitVal=.tau_default)
       .promote(".stage4")
       step1_used_pcg    <<- TRUE
       step1_used_offset <<- TRUE
@@ -911,7 +909,7 @@ if (fit_success) {
   }
 
 } else {
-  # fit_success=FALSE: initial fit errored — start at Stage 2
+  # fit_success=FALSE: initial fit errored start at Stage 2
   cat("Initial fit errored. Starting fallback chain at Stage 2\n")
   .run_fallback_chain(start_stage=2)
 }
@@ -919,10 +917,17 @@ if (fit_success) {
 # Check whether the final promoted model is still bad after all stages
 step1_all_failed <- !.thetaOK("")
 if (step1_all_failed) {
-  cat("\nWARNING: All 6 fallback stages exhausted — theta still out of bounds.\n")
+  cat("\nWARNING: All 6 fallback stages exhausted theta still out of bounds.\n")
+  #model_file <- paste0(opt$outputPrefix, ".rda")
+  #if (file.exists(model_file)){
+  #	file.remove(model_file)	
+  #}
+  #for (f in c(paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt"),
+  #            paste0(opt$outputPrefix, ".varianceRatio.txt"))) {
+  #  if (file.exists(f)) { file.remove(f)}
+  #}
 }
 
-# ── Report ──────────────────────────────────────────────────────────────────
 
 write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
                                used_pcg, used_offset, tau_switched,
@@ -947,7 +952,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   is_cov_offset_final <- used_offset
   use_sandwich        <- NULL
   emat_col_names      <- NULL
-  if (file.exists(model_file)) {
+  
+  if (file.exists(model_file) && file.size(model_file) > 0) {
     tmp_env <- new.env()
     load(model_file, envir = tmp_env)
     m <- tmp_env$modglmm
@@ -959,10 +965,19 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   }
 
   theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
-               sum(theta_vals[2:length(theta_vals)]) <= 0 ||
-               sum(theta_vals[2:length(theta_vals)]) > 1
+               sum(theta_vals[2:length(theta_vals)]) < 0 ||
+               sum(theta_vals[2:length(theta_vals)]) > 10
 
-  overall_ok <- file.exists(model_file) && converged && !theta_oob
+  overall_ok <- file.exists(model_file) && converged && !theta_oob && file.size(model_file) > 0
+  
+  if(!overall_ok){
+  	
+	m$use_sandwich = rep(TRUE, length(m$use_sandwich))
+	modglmm = m
+	save(modglmm, file=model_file)
+  }
+  
+
   status_str <- if (overall_ok) "SUCCESS" else "FAILURE"
   solver_str <- if (used_pcg) "PCG" else "SMW"
   theta_str  <- if (all(!is.na(theta_vals))) {
