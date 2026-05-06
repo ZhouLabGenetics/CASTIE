@@ -952,7 +952,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   is_cov_offset_final <- used_offset
   use_sandwich        <- NULL
   emat_col_names      <- NULL
-  
+  m                   <- NULL  # always defined so rescue block is safe
+
   if (file.exists(model_file) && file.size(model_file) > 0) {
     tmp_env <- new.env()
     load(model_file, envir = tmp_env)
@@ -964,19 +965,23 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     emat_col_names <- m$eMatcolNames
   }
 
+  # also flag any individual tau == 0 for non-offset models (matches .thetaOK logic)
   theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
                sum(theta_vals[2:length(theta_vals)]) < 0 ||
-               sum(theta_vals[2:length(theta_vals)]) > 10
+               sum(theta_vals[2:length(theta_vals)]) > 10 ||
+               (!isTRUE(is_cov_offset_final) && any(theta_vals[2:length(theta_vals)] == 0))
 
-  overall_ok <- file.exists(model_file) && converged && !theta_oob && file.size(model_file) > 0
-  
-  if(!overall_ok){
-  	
-	m$use_sandwich = rep(TRUE, length(m$use_sandwich))
-	modglmm = m
-	save(modglmm, file=model_file)
+  # require var ratio file for a usable result
+  overall_ok <- file.exists(model_file) && converged && !theta_oob &&
+                file.size(model_file) > 0 && var_ratio_file != ""
+
+  if (!overall_ok && !all_failed && !is.null(m) && !is.null(m$use_sandwich)) {
+    m$use_sandwich <- rep(TRUE, length(m$use_sandwich))
+    modglmm <- m
+    save(modglmm, file=model_file)
+    use_sandwich <- m$use_sandwich  # keep local var in sync with what was saved
   }
-  
+
 
   status_str <- if (overall_ok) "SUCCESS" else "FAILURE"
   solver_str <- if (used_pcg) "PCG" else "SMW"
@@ -998,6 +1003,7 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     paste0("converged flag    : ", converged),
     paste0("Theta in bounds   : ", !theta_oob),
     paste0("Final theta       : ", theta_str),
+    if (var_ratio_file == "") "WARNING           : Variance ratio file missing — step 2 will fail" else NULL,
     "",
     "--- Solver ---",
     paste0("Solver used       : ", solver_str),
@@ -1009,7 +1015,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     "",
     "--- Output files ---",
     paste0("Model file        : ", model_file,
-           " (exists: ", file.exists(model_file), ")"),
+           " (exists: ", file.exists(model_file),
+           if (all_failed) ", will be removed" else "", ")"),
     paste0("Var ratio file    : ",
            if (var_ratio_file != "") var_ratio_file else "not found")
   ), report_file)
