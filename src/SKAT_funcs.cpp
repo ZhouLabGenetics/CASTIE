@@ -537,10 +537,11 @@ Rcpp::List Get_PValue_Lambda(arma::vec &lambda, arma::vec &Q, arma::ivec &df1){
     
     is_converge(i) = 1;
     
+    int ifault = Rcpp::as<int>(out["ifault"]);
     // Check convergence
     if (lambda.n_elem == 1) {
       p_val[i] = p_val_liu[i];
-    } else if (out["ifault"] != 0) {
+    } else if (ifault != 0) {
       is_converge[i] = 0;
     }
     
