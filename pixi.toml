@@ -48,6 +48,7 @@ r-dplyr = "*"
 r-dbplyr = "*"
 r-matrix = "*"
 r-furrr = "*"
+r-hdf5r = "*"   # HDF5 phenoFile support; pulls in hdf5 C library
 
 # Standard R packages
 r-nlme = "*"

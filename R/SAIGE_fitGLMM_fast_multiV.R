@@ -285,6 +285,8 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
       cat(nrow(sampleListwithGeno), " samples are in the sparse GRM\n")
     }
   }
+  .t0_total <- proc.time()
+
   if (!file.exists(phenoFile)) {
     stop("ERROR! phenoFile ", phenoFile, " does not exsit\n")
   } else {
@@ -314,101 +316,107 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     }
 
 
-    ## read phenotype file — for large files with many columns, use cut + temp file
-    ## to keep memory low; for small files, fread with select is fine.
-    isCompressed <- grepl("\\.(gz|bgz|zst)$", phenoFile)
-    isZstd <- grepl("\\.zst$", phenoFile)
+    .t_pheno <- proc.time()
+    isPhenoHDF5 <- grepl("\\.(h5|hdf5)$", phenoFile, ignore.case = TRUE)
 
-    ## detect file size to decide strategy
-    if (isCompressed) {
-      fileSize_KB <- as.numeric(system(paste0("du -k ", phenoFile, " | cut -f1"), intern = TRUE))
-      isphenoFileLarge <- (fileSize_KB > 200000)
+    if (isPhenoHDF5) {
+      ## ---- HDF5 format: read metadata + one gene column from sparse matrix ----
+      data <- read_pheno_h5(phenoFile, phenoCol, sampleIDColinphenoFile, checkColList)
+
     } else {
-      fileSize_KB <- file.info(phenoFile)$size / 1024
-      isphenoFileLarge <- (fileSize_KB > 500000)
-    }
+      ## ---- Plain text format (tsv/csv/gz/bgz) ----
+      isCompressed <- grepl("\\.(gz|bgz)$", phenoFile)
 
-    ## pick decompression command: pigz (parallel) > gunzip; zstdcat for .zst
-    if (isCompressed) {
-      if (isZstd) {
-        dcatCmd <- "zstdcat"
-      } else if (system("command -v pigz > /dev/null 2>&1") == 0) {
-        dcatCmd <- "pigz -dc"
-      } else {
-        dcatCmd <- "gunzip -c"
-      }
-    }
-
-    if (isphenoFileLarge) {
-      ## large file: use cut/awk to extract only needed columns to temp file
+      ## detect file size to decide strategy
       if (isCompressed) {
-        firstLine <- system(paste0(dcatCmd, " ", phenoFile, " | head -n 1"), intern = TRUE)
+        fileSize_KB <- as.numeric(system(paste0("du -k ", phenoFile, " | cut -f1"), intern = TRUE))
+        isphenoFileLarge <- (fileSize_KB > 200000)
       } else {
-        firstLine <- readLines(phenoFile, n = 1)
+        fileSize_KB <- file.info(phenoFile)$size / 1024
+        isphenoFileLarge <- (fileSize_KB > 500000)
       }
-      ## detect delimiter and parse column names
-      if (grepl("\t", firstLine)) {
-        allCols <- strsplit(firstLine, "\t", fixed = TRUE)[[1]]
-        cutDelim <- ""
-        useAwk <- FALSE
-      } else if (grepl(",", firstLine)) {
-        allCols <- strsplit(firstLine, ",", fixed = TRUE)[[1]]
-        cutDelim <- " -d','"
-        useAwk <- FALSE
-      } else {
-        ## space-delimited: cut cannot handle multiple consecutive spaces,
-        ## use awk for correctness (works in BSD awk, gawk, and mawk)
-        allCols <- strsplit(trimws(firstLine), "\\s+")[[1]]
-        useAwk <- TRUE
-      }
-      colIndices <- which(allCols %in% checkColList)
 
-      ## extract columns to temp file, then fread from file (fastest path)
-      ## use a stable cache name so repeated calls (fallback stages) skip re-extraction
-      phenoFiletemp <- file.path(dirname(outputPrefix),
-        paste0(".saige_subcols_", phenoCol, "_cache"))
-      if (!file.exists(phenoFiletemp)) {
-        if (useAwk) {
-          awkFields <- paste0("$", colIndices, collapse = ",")
-          awkCmd <- paste0("awk 'BEGIN{OFS=\"\\t\"}{print ", awkFields, "}'")
-          if (isCompressed) {
-            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | ", awkCmd, " > ", phenoFiletemp))
-          } else {
-            system(paste0("LC_ALL=C ", awkCmd, " ", phenoFile, " > ", phenoFiletemp))
-          }
+      ## pick decompression command: pigz (parallel) > gunzip
+      if (isCompressed) {
+        if (system("command -v pigz > /dev/null 2>&1") == 0) {
+          dcatCmd <- "pigz -dc"
         } else {
-          colIndicesStr <- paste(colIndices, collapse = ",")
-          if (isCompressed) {
-            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | cut", cutDelim, " -f ", colIndicesStr, " > ", phenoFiletemp))
-          } else {
-            system(paste0("LC_ALL=C cut", cutDelim, " -f ", colIndicesStr, " ", phenoFile, " > ", phenoFiletemp))
-          }
+          dcatCmd <- "gunzip -c"
         }
-        cat("Phenotype column cache created:", phenoFiletemp, "\n")
-      } else {
-        cat("Reusing cached phenotype columns:", phenoFiletemp, "\n")
       }
 
-      data <- data.table:::fread(phenoFiletemp,
-        header = T, stringsAsFactors = FALSE,
-        colClasses = list(character = sampleIDColinphenoFile), data.table = F
-      )
-    } else {
-      ## small file: fread with select is fast enough
-      if (isCompressed) {
-        data <- data.table:::fread(
-          cmd = paste0(dcatCmd, " ", phenoFile),
+      if (isphenoFileLarge) {
+        ## large file: use cut/awk to extract only needed columns to temp file
+        if (isCompressed) {
+          firstLine <- system(paste0(dcatCmd, " ", phenoFile, " | head -n 1"), intern = TRUE)
+        } else {
+          firstLine <- readLines(phenoFile, n = 1)
+        }
+        ## detect delimiter and parse column names
+        if (grepl("\t", firstLine)) {
+          allCols <- strsplit(firstLine, "\t", fixed = TRUE)[[1]]
+          cutDelim <- ""
+          useAwk <- FALSE
+        } else if (grepl(",", firstLine)) {
+          allCols <- strsplit(firstLine, ",", fixed = TRUE)[[1]]
+          cutDelim <- " -d','"
+          useAwk <- FALSE
+        } else {
+          ## space-delimited: cut cannot handle multiple consecutive spaces,
+          ## use awk for correctness (works in BSD awk, gawk, and mawk)
+          allCols <- strsplit(trimws(firstLine), "\\s+")[[1]]
+          useAwk <- TRUE
+        }
+        colIndices <- which(allCols %in% checkColList)
+
+        ## extract columns to temp file, then fread from file (fastest path)
+        ## use a stable cache name so repeated calls (fallback stages) skip re-extraction
+        phenoFiletemp <- file.path(dirname(outputPrefix),
+          paste0(".saige_subcols_", phenoCol, "_cache"))
+        if (!file.exists(phenoFiletemp)) {
+          if (useAwk) {
+            awkFields <- paste0("$", colIndices, collapse = ",")
+            awkCmd <- paste0("awk 'BEGIN{OFS=\"\\t\"}{print ", awkFields, "}'")
+            if (isCompressed) {
+              system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | ", awkCmd, " > ", phenoFiletemp))
+            } else {
+              system(paste0("LC_ALL=C ", awkCmd, " ", phenoFile, " > ", phenoFiletemp))
+            }
+          } else {
+            colIndicesStr <- paste(colIndices, collapse = ",")
+            if (isCompressed) {
+              system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | cut", cutDelim, " -f ", colIndicesStr, " > ", phenoFiletemp))
+            } else {
+              system(paste0("LC_ALL=C cut", cutDelim, " -f ", colIndicesStr, " ", phenoFile, " > ", phenoFiletemp))
+            }
+          }
+          cat("Phenotype column cache created:", phenoFiletemp, "\n")
+        } else {
+          cat("Reusing cached phenotype columns:", phenoFiletemp, "\n")
+        }
+
+        data <- data.table:::fread(phenoFiletemp,
           header = T, stringsAsFactors = FALSE,
-          colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          colClasses = list(character = sampleIDColinphenoFile), data.table = F
         )
       } else {
-        data <- data.table:::fread(phenoFile,
-          header = T, stringsAsFactors = FALSE,
-          colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
-        )
+        ## small file: fread with select is fast enough
+        if (isCompressed) {
+          data <- data.table:::fread(
+            cmd = paste0(dcatCmd, " ", phenoFile),
+            header = T, stringsAsFactors = FALSE,
+            colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          )
+        } else {
+          data <- data.table:::fread(phenoFile,
+            header = T, stringsAsFactors = FALSE,
+            colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          )
+        }
       }
-    }
+    } ## end plain text vs HDF5
 
+    cat(sprintf("[TIMING] Phenotype file reading: %.1fs\n", (proc.time() - .t_pheno)[3]))
 
     if (isRemoveZerosinPheno) {
       data <- data[which(data[, which(colnames(data) == phenoCol)] > 0), ]
@@ -479,6 +487,7 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     }
 
 
+    .t_dataprep <- proc.time()
     print("HERERE2")
 
     if (length(covarColList) > 0) {
@@ -922,8 +931,9 @@ if(is.null(eMat)){
   setminMAFforGRM(minMAFforGRM)
   setmaxMissingRateforGRM(maxMissingRateforGRM)
 
+  cat(sprintf("[TIMING] Data prep (merge, model matrix, eMat, GRM): %.1fs\n", (proc.time() - .t_dataprep)[3]))
 
-
+  .t_glm <- proc.time()
   if (traitType == "binary") {
     cat(phenoCol, " is a binary trait\n")
     uniqPheno <- sort(unique(dataMerge_sort[, which(colnames(dataMerge_sort) == phenoCol)]))
@@ -1078,6 +1088,8 @@ if(is.null(eMat)){
   print(isStoreSigma)
   #set_store_sigma(isStoreSigma)
 
+  cat(sprintf("[TIMING] Initial GLM fit: %.1fs\n", (proc.time() - .t_glm)[3]))
+
   if (!skipModelFitting) {
     # setisUseSparseSigmaforNullModelFitting(useSparseGRMtoFitNULL)
     cat("Start fitting the NULL GLMM\n")
@@ -1131,6 +1143,7 @@ if(is.null(eMat)){
 
 
       modglmm$obj.glm.null$model <- data.frame(modglmm$obj.glm.null$model)
+      cat(sprintf("[TIMING] AIREML null model fitting: %.1fs\n", (proc.time() - t_begin)[3]))
     } else {
       system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV_NB(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
         fit0,
@@ -1242,6 +1255,7 @@ if(is.null(eMat)){
 
 
 
+    .t_post <- proc.time()
     # if((skipVarianceRatioEstimation & useSparseGRMtoFitNULL)){
     family <- fit0$family
     eta <- modglmm$linear.predictors
@@ -1503,6 +1517,9 @@ if(is.null(eMat)){
     # setisUseSparseSigmaforNullModelFitting(useSparseGRMtoFitNULL)
   }
 
+  cat(sprintf("[TIMING] Post-processing (Sigma_iX, spSigma, save): %.1fs\n", (proc.time() - .t_post)[3]))
+
+  .t_varratio <- proc.time()
   if (!skipVarianceRatioEstimation) {
     if (LOCO) {
       MsubIndVec <- getQCdMarkerIndex()
@@ -1563,6 +1580,9 @@ if(is.null(eMat)){
     modglmm$use_sandwich = use_sandwich
   }
   save(modglmm, file = modelOut)
+
+  cat(sprintf("[TIMING] Variance ratio estimation + final save: %.1fs\n", (proc.time() - .t_varratio)[3]))
+  cat(sprintf("[TIMING] ===== Total fitNULLGLMM_multiV: %.1fs =====\n", (proc.time() - .t0_total)[3]))
 }
 
 

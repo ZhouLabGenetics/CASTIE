@@ -246,90 +246,94 @@ if(initialSubSampleProp < 1){
     }
 
 
-    ## read phenotype file — same optimized approach as fitNULLGLMM_multiV,
-    ## writes to the same cache file so the main fit can reuse it
-    isCompressed <- grepl("\\.(gz|bgz|zst)$", phenoFile)
-    isZstd <- grepl("\\.zst$", phenoFile)
+    ## read phenotype file — detect HDF5 vs plain text
+    isPhenoHDF5 <- grepl("\\.(h5|hdf5)$", phenoFile, ignore.case = TRUE)
 
-    if (isCompressed) {
-      fileSize_KB <- as.numeric(system(paste0("du -k ", phenoFile, " | cut -f1"), intern = TRUE))
-      isphenoFileLarge <- (fileSize_KB > 200000)
+    if (isPhenoHDF5) {
+      ## ---- HDF5 format ----
+      data <- read_pheno_h5(phenoFile, phenoCol, sampleIDColinphenoFile, checkColList)
+
     } else {
-      fileSize_KB <- file.info(phenoFile)$size / 1024
-      isphenoFileLarge <- (fileSize_KB > 500000)
-    }
+      ## ---- Plain text format (tsv/csv/gz/bgz) ----
+      isCompressed <- grepl("\\.(gz|bgz)$", phenoFile)
 
-    if (isCompressed) {
-      if (isZstd) {
-        dcatCmd <- "zstdcat"
-      } else if (system("command -v pigz > /dev/null 2>&1") == 0) {
-        dcatCmd <- "pigz -dc"
-      } else {
-        dcatCmd <- "gunzip -c"
-      }
-    }
-
-    if (isphenoFileLarge) {
-      ## same stable cache name used by fitNULLGLMM_multiV
-      phenoFiletemp <- file.path(dirname(outputPrefix),
-        paste0(".saige_subcols_", phenoCol, "_cache"))
-      if (!file.exists(phenoFiletemp)) {
-        if (isCompressed) {
-          firstLine <- system(paste0(dcatCmd, " ", phenoFile, " | head -n 1"), intern = TRUE)
-        } else {
-          firstLine <- readLines(phenoFile, n = 1)
-        }
-        if (grepl("\t", firstLine)) {
-          allCols <- strsplit(firstLine, "\t", fixed = TRUE)[[1]]
-          cutDelim <- ""
-          useAwk <- FALSE
-        } else if (grepl(",", firstLine)) {
-          allCols <- strsplit(firstLine, ",", fixed = TRUE)[[1]]
-          cutDelim <- " -d','"
-          useAwk <- FALSE
-        } else {
-          allCols <- strsplit(trimws(firstLine), "\\s+")[[1]]
-          useAwk <- TRUE
-        }
-        colIndices <- which(allCols %in% checkColList)
-
-        if (useAwk) {
-          awkFields <- paste0("$", colIndices, collapse = ",")
-          awkCmd <- paste0("awk 'BEGIN{OFS=\"\\t\"}{print ", awkFields, "}'")
-          if (isCompressed) {
-            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | ", awkCmd, " > ", phenoFiletemp))
-          } else {
-            system(paste0("LC_ALL=C ", awkCmd, " ", phenoFile, " > ", phenoFiletemp))
-          }
-        } else {
-          colIndicesStr <- paste(colIndices, collapse = ",")
-          if (isCompressed) {
-            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | cut", cutDelim, " -f ", colIndicesStr, " > ", phenoFiletemp))
-          } else {
-            system(paste0("LC_ALL=C cut", cutDelim, " -f ", colIndicesStr, " ", phenoFile, " > ", phenoFiletemp))
-          }
-        }
-        cat("Phenotype column cache created:", phenoFiletemp, "\n")
-      } else {
-        cat("Reusing cached phenotype columns:", phenoFiletemp, "\n")
-      }
-
-      data <- data.table:::fread(phenoFiletemp,
-        header = T, stringsAsFactors = FALSE,
-        colClasses = list(character = sampleIDColinphenoFile), data.table = F
-      )
-    } else {
       if (isCompressed) {
-        data <- data.table:::fread(
-          cmd = paste0(dcatCmd, " ", phenoFile),
+        fileSize_KB <- as.numeric(system(paste0("du -k ", phenoFile, " | cut -f1"), intern = TRUE))
+        isphenoFileLarge <- (fileSize_KB > 200000)
+      } else {
+        fileSize_KB <- file.info(phenoFile)$size / 1024
+        isphenoFileLarge <- (fileSize_KB > 500000)
+      }
+
+      if (isCompressed) {
+        if (system("command -v pigz > /dev/null 2>&1") == 0) {
+          dcatCmd <- "pigz -dc"
+        } else {
+          dcatCmd <- "gunzip -c"
+        }
+      }
+
+      if (isphenoFileLarge) {
+        phenoFiletemp <- file.path(dirname(outputPrefix),
+          paste0(".saige_subcols_", phenoCol, "_cache"))
+        if (!file.exists(phenoFiletemp)) {
+          if (isCompressed) {
+            firstLine <- system(paste0(dcatCmd, " ", phenoFile, " | head -n 1"), intern = TRUE)
+          } else {
+            firstLine <- readLines(phenoFile, n = 1)
+          }
+          if (grepl("\t", firstLine)) {
+            allCols <- strsplit(firstLine, "\t", fixed = TRUE)[[1]]
+            cutDelim <- ""
+            useAwk <- FALSE
+          } else if (grepl(",", firstLine)) {
+            allCols <- strsplit(firstLine, ",", fixed = TRUE)[[1]]
+            cutDelim <- " -d','"
+            useAwk <- FALSE
+          } else {
+            allCols <- strsplit(trimws(firstLine), "\\s+")[[1]]
+            useAwk <- TRUE
+          }
+          colIndices <- which(allCols %in% checkColList)
+
+          if (useAwk) {
+            awkFields <- paste0("$", colIndices, collapse = ",")
+            awkCmd <- paste0("awk 'BEGIN{OFS=\"\\t\"}{print ", awkFields, "}'")
+            if (isCompressed) {
+              system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | ", awkCmd, " > ", phenoFiletemp))
+            } else {
+              system(paste0("LC_ALL=C ", awkCmd, " ", phenoFile, " > ", phenoFiletemp))
+            }
+          } else {
+            colIndicesStr <- paste(colIndices, collapse = ",")
+            if (isCompressed) {
+              system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | cut", cutDelim, " -f ", colIndicesStr, " > ", phenoFiletemp))
+            } else {
+              system(paste0("LC_ALL=C cut", cutDelim, " -f ", colIndicesStr, " ", phenoFile, " > ", phenoFiletemp))
+            }
+          }
+          cat("Phenotype column cache created:", phenoFiletemp, "\n")
+        } else {
+          cat("Reusing cached phenotype columns:", phenoFiletemp, "\n")
+        }
+
+        data <- data.table:::fread(phenoFiletemp,
           header = T, stringsAsFactors = FALSE,
-          colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          colClasses = list(character = sampleIDColinphenoFile), data.table = F
         )
       } else {
-        data <- data.table:::fread(phenoFile,
-          header = T, stringsAsFactors = FALSE,
-          colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
-        )
+        if (isCompressed) {
+          data <- data.table:::fread(
+            cmd = paste0(dcatCmd, " ", phenoFile),
+            header = T, stringsAsFactors = FALSE,
+            colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          )
+        } else {
+          data <- data.table:::fread(phenoFile,
+            header = T, stringsAsFactors = FALSE,
+            colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          )
+        }
       }
     }
     ID = data[,which(colnames(data) == sampleIDColinphenoFile)]

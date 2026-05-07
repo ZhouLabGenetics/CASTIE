@@ -7,7 +7,7 @@ Author: Christiana Liu, Linfeng Hu, Anna Cuomo, Wei Zhou
 Maintainer: Wei Zhou <wzhou@broadinstitute.org> 
 Description:an R package that implements the Scalable and Accurate Implementation of Generalized Poisson mixed model for eQTL mapping at the single-cell level.  
 License: GPL (>= 2)
-Imports: Rcpp (>= 1.0.7), RcppParallel, Matrix, data.table, RcppArmadillo (>= 0.10.7.5), RcppNumerical
+Imports: Rcpp (>= 1.0.7), RcppParallel, Matrix, data.table, RcppArmadillo (>= 0.10.7.5), RcppNumerical, hdf5r
 LinkingTo: Rcpp, RcppArmadillo (>= 0.10.7.5), RcppParallel, data.table, SPAtest,
         RcppEigen, Matrix, methods, BH, optparse, SKAT, MetaSKAT, qlcMatrix, RhpcBLASctl, RSQLite, dplyr, nlme, MASS, RcppEigen, RcppNumerical
 Remotes: cysouw/qlcMatrix, leeshawn/MetaSKAT
