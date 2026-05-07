@@ -1800,22 +1800,25 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   for (k in 1:length(listOfMarkersForVarRatio)) {
     if (cateVarRatioIndexVec[k] == 1) {
       numMarkers0 <- numMarkers
-      varRatio_sparseGRM_vec <- NULL
-      varRatio_NULL_vec <- NULL
-      varRatio_NULL_sample_vec <- NULL
-      varRatio_NULL_noXadj_vec <- NULL
-
+      ## Preallocate accumulators to the marker pool size and track n_acc
+      ## accepted markers; trim before summarizing. Avoids quadratic c()/rbind
+      ## growth across the marker loop.
+      N_max <- length(listOfMarkersForVarRatio[[k]])
+      varRatio_sparseGRM_vec   <- numeric(N_max)
+      varRatio_NULL_vec        <- numeric(N_max)
+      varRatio_NULL_sample_vec <- numeric(N_max)
+      varRatio_NULL_noXadj_vec <- numeric(N_max)
+      n_acc <- 0L
 
       if (!is.null(obj.glmm.null$eMat)) {
-        varRatio_NULL_eg_mat <- NULL
-        varRatio_NULL_eg_vec <- NULL
-        varRatio_sparse_eg_mat <- NULL
-        varRatio_sparse_eg_vec <- NULL
-	varModel_egcondg_mat <- NULL
-	#varModel_egcondg_vec <- NULL
-	varSW_egcondg_mat <- NULL
-	varSWtoModel_egcondg_mat <- NULL
-	#varSW_egcondg_vec <- NULL
+        nE <- ncol(obj.glmm.null$eMat)
+        varRatio_NULL_eg_mat     <- matrix(0, nrow = N_max, ncol = nE)
+        varRatio_NULL_eg_vec     <- NULL
+        varRatio_sparse_eg_mat   <- matrix(0, nrow = N_max, ncol = nE)
+        varRatio_sparse_eg_vec   <- NULL
+        varModel_egcondg_mat     <- matrix(0, nrow = N_max, ncol = nE)
+        varSW_egcondg_mat        <- matrix(0, nrow = N_max, ncol = nE)
+        varSWtoModel_egcondg_mat <- NULL
       }
 
       indexInMarkerList <- 1
@@ -1840,36 +1843,19 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             G0 <- 2 - G0
           }
           G0sample <- G0
-          print("length(G0)   aaaaa")
-          print(length(G0))
-          cat("G0", G0[1:10], "\n")
-          print(dim(I_mat))
-          print(length(G0sample))
           G0 <- as.numeric(I_mat %*% G0sample)
-          # }
-          # print("length(G0)   bbbb")
-          # print(length(G0))
-          cat("G0", G0[1:10], "\n")
 
           CHR <- bimPlink[Indexvector_forVarRatio[i] + 1, 1]
           cat("CHR ", CHR, "\n")
-          print(bimPlink[Indexvector_forVarRatio[i] + 1, ])
-          # if(sum(G0)/(2*Nnomissing) > 0.5){
           if (sum(G0) / (2 * length(G0)) > 0.5) {
             G0 <- 2 - G0
           }
-          print("length(G0)")
-          print(length(G0))
-          # if(any(duplicated(obj.glmm.null$sampleID))){
-          # 	G0 = G0[dupSampleIndex]
-          # }
           NAset <- which(G0 == 0)
           AC <- sum(G0)
-          print("length(NAset)")
-          print(length(NAset))
           indexInMarkerList <- indexInMarkerList + 1
           if ((CHR >= 1 & CHR <= 22 & AC > 0 & AC < length(G0)) | includeNonautoMarkersforVarRatio) {
             AF <- AC / (2 * Nnomissing)
+            n_acc <- n_acc + 1L   # row index into preallocated accumulators
             if (CHR >= 1 & CHR <= 22) {
               autoMarker <- TRUE
             } else {
@@ -1914,12 +1900,9 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             GtSig_iX  <- as.vector(crossprod(G, Sigma_iX))     # length p
             tX_Sig_iG <- as.vector(crossprod(X, Sigma_iG))     # length p (reused below for I_21)
             var1      <- as.numeric(GtSig_iG - GtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
-            cat("AC ", AC, "\n")
             S <- innerProduct(G, obj.glmm.null$residuals * var_weights)
-            cat("S is ", S, "\n")
-            cat("var1 is ", var1, "\n")
             p_exact <- pchisq(S^2 / var1, df = 1, lower.tail = F)
-            cat("p_exact ", p_exact, "\n")
+            cat("AC ", AC, "  S ", S, "  p_exact ", p_exact, "\n")
             # res_sample = as.vector(obj.glmm.null$residuals %*% I_mat)
 
 
@@ -1937,17 +1920,7 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
               for (ne in 1:ncol(obj.glmm.null$eMat)) {
                 evec <- obj.glmm.null$eMat[, ne]
 
-                # evec = rnorm(length(G))
-
-                print("evec[1:100]")
-                print(evec[1:100])
-                # evec = t(I_mat) %*% evec
-                # XVsample0_e = XVsample0_e_list[[ne]]
                 GE <- G0 * evec
-                # GE = G * evec
-                # GE = G0
-                print("length(GE)")
-                print(length(GE))
                 GE_tilde <- GE - obj.noK$XXVX_inv %*% (obj.noK$XV %*% GE)
                 # GE_tilde_new = GE - I_mat %*% XXVXsample_inv0 %*%  (XVsample0_e %*% G0sample)
                 # print("sum(GE_tilde != GE_tilde_new)")
@@ -1969,10 +1942,8 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 		var1GE_vec <- c(var1GE_vec, var1GE)
 		S_GE <- innerProduct(GE_tilde, obj.glmm.null$residuals * var_weights)
                 p_exact_GE <- pchisq(S_GE^2 / var1GE, df = 1, lower.tail = F)
-                cat("p_exact_GE ", p_exact_GE, "\n")
-                cat("S_GE ", S_GE, "\n")
-                cat("var1GE ", var1GE, "\n")
-                
+                cat("S_GE ", S_GE, "  var1GE ", var1GE, "  p_exact_GE ", p_exact_GE, "\n")
+
 		# Donor-level contributions
 		I_11 <- var1
 		I_22 <- var1GE
@@ -2053,10 +2024,9 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                 var2_a <- t(G0_sample_tilde_I) %*% Sigma_iG
               }
               var2sparseGRM <- var2_a[1, 1]
-              cat("var2sparseGRM Here ", var2sparseGRM, "\n")
-              varRatio_sparseGRM_vec <- c(varRatio_sparseGRM_vec, var1 / var2sparseGRM)
+              varRatio_sparseGRM_vec[n_acc] <- var1 / var2sparseGRM
             } else {
-              varRatio_sparseGRM_vec <- c(varRatio_sparseGRM_vec, 1)
+              varRatio_sparseGRM_vec[n_acc] <- 1
             }
             # }
 
@@ -2097,12 +2067,8 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
               # cat("mean(G0_sample_tilde) ", mean(G0_sample_tilde), "\n")
               # var2null_new = innerProduct(as.vector(t(mu*var_weights) %*% I_mat), G0_sample_tilde*G0_sample_tilde)
               var2null_sample <- innerProduct(as.vector(t(mu * var_weights) %*% I_mat), G0_sample_tilde * G0_sample_tilde)
-               cat("var2null ", var2null, "\n")
-               cat("var2null_sample ", var2null_sample, "\n")
-              # cat("var2null_new ", var2null_new, "\n")
               muI <- as.vector(t(mu) %*% I_mat) * as.vector(var_weights)
               var2null_noXadj <- innerProduct(as.vector(t(mu * var_weights) %*% I_mat), G_noXadj * G_noXadj)
-               cat("var2null_noXadj ", var2null_sample, "\n")
               var2nullGE_vec <- NULL
               if (!is.null(obj.glmm.null$eMat)) {
                 for (ne in 1:ncol(obj.glmm.null$eMat)) {
@@ -2111,9 +2077,6 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                   # cat("mean(GE_sample_tilde) ", mean(GE_sample_tilde), "\n")
                   var22nullGE <- innerProduct(mu * var_weights, GE_tilde * GE_tilde)
                   #var22nullGE = innerProduct(as.vector(t(mu*var_weights) %*% I_mat), as.vector(GE_sample_tilde*GE_sample_tilde))
-                  #cat("var22nullGE_old ", var22nullGE_old, "\n")
-                  cat("var22nullGE ", var22nullGE, "\n")
-
                   var2nullGE_vec <- c(var2nullGE_vec, var22nullGE)
                 }
               }
@@ -2133,25 +2096,18 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
               }
             }
 
-            cat("mu\n")
-            print(mu[1:100])
-            cat("AC ", AC, "\n")
-            # cat("S ", S*sqrt(AC), "\n")
-            cat("var1 ", var1, "\n")
-            cat("var2null ", var2null, "\n")
-            cat("var2null_noXadj ", var2null_noXadj, "\n")
+            cat("AC ", AC, "  var1 ", var1, "  var2null ", var2null, "\n")
             # cat("p_approx ", p_approx, "\n")
             # cat("p_approx_true ", p_approx_true, "\n")
-            varRatio_NULL_vec <- c(varRatio_NULL_vec, var1 / var2null)
-            varRatio_NULL_sample_vec <- c(varRatio_NULL_sample_vec, var1 / var2null_sample)
-            varRatio_NULL_noXadj_vec <- c(varRatio_NULL_noXadj_vec, var1 / var2null_noXadj)
+            varRatio_NULL_vec[n_acc]        <- var1 / var2null
+            varRatio_NULL_sample_vec[n_acc] <- var1 / var2null_sample
+            varRatio_NULL_noXadj_vec[n_acc] <- var1 / var2null_noXadj
             if (!is.null(obj.glmm.null$eMat)) {
-              varRatio_NULL_eg_mat <- rbind(varRatio_NULL_eg_mat, var1GE_vec / var2nullGE_vec)
-              varRatio_sparse_eg_mat <- rbind(varRatio_sparse_eg_mat, var1GE_vec / var2sparseGE_vec)
-               varModel_egcondg_mat = rbind(varModel_egcondg_mat, varModelGEcond_vec)
-	       varSW_egcondg_mat = rbind(varSW_egcondg_mat, varSWGEcond_vec)
-	    
-	    }
+              varRatio_NULL_eg_mat[n_acc, ]   <- var1GE_vec / var2nullGE_vec
+              varRatio_sparse_eg_mat[n_acc, ] <- var1GE_vec / var2sparseGE_vec
+              varModel_egcondg_mat[n_acc, ]   <- varModelGEcond_vec
+              varSW_egcondg_mat[n_acc, ]      <- varSWGEcond_vec
+            }
             # indexInMarkerList = indexInMarkerList + 1
             numTestedMarker <- numTestedMarker + 1
           } else {
@@ -2164,15 +2120,8 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
         } # end of while(numTestedMarker < numMarkers)
 
 
-        print("varRatio_NULL_vec")
-        print(varRatio_NULL_vec)
-        print("varRatio_NULL_noXadj_vec")
-        print(varRatio_NULL_noXadj_vec)
-
-	print("var2nullGE_vec")
-	print(var2nullGE_vec)
-        # ratioCV = calCV(varRatio_NULL_vec)
-        ratioCV <- calCV(varRatio_NULL_noXadj_vec)
+        ## Vectors are preallocated; pass only the populated [1:n_acc] view to calCV
+        ratioCV <- calCV(varRatio_NULL_noXadj_vec[seq_len(n_acc)])
 
         if (ratioCV > ratioCVcutoff) {
           cat("CV for variance ratio estimate using ", numMarkers0, " markers is ", ratioCV, " > ", ratioCVcutoff, "\n")
@@ -2189,10 +2138,20 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
         }
       } # end of while(ratioCV > ratioCVcutoff)
 
-      if (length(varRatio_sparseGRM_vec) > 0) {
-        cat("varRatio_sparseGRM_vec\n")
-        print(varRatio_sparseGRM_vec)
+      ## Trim preallocated accumulators to the n_acc actually-used rows before
+      ## summarizing so mean()/colMeans() see only real values, not the zero-padded tail.
+      varRatio_sparseGRM_vec   <- varRatio_sparseGRM_vec[seq_len(n_acc)]
+      varRatio_NULL_vec        <- varRatio_NULL_vec[seq_len(n_acc)]
+      varRatio_NULL_sample_vec <- varRatio_NULL_sample_vec[seq_len(n_acc)]
+      varRatio_NULL_noXadj_vec <- varRatio_NULL_noXadj_vec[seq_len(n_acc)]
+      if (!is.null(obj.glmm.null$eMat)) {
+        varRatio_NULL_eg_mat   <- varRatio_NULL_eg_mat[seq_len(n_acc), , drop = FALSE]
+        varRatio_sparse_eg_mat <- varRatio_sparse_eg_mat[seq_len(n_acc), , drop = FALSE]
+        varModel_egcondg_mat   <- varModel_egcondg_mat[seq_len(n_acc), , drop = FALSE]
+        varSW_egcondg_mat      <- varSW_egcondg_mat[seq_len(n_acc), , drop = FALSE]
+      }
 
+      if (n_acc > 0) {
         varRatio_sparse <- mean(varRatio_sparseGRM_vec)
         cat("varRatio_sparse", varRatio_sparse, "\n")
         varRatioTable <- rbind(varRatioTable, c(varRatio_sparse, "sparse", k))
