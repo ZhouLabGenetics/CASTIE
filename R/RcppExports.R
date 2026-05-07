@@ -249,6 +249,10 @@ applySigmaInvSMW_multiV_mat <- function(Bmat) {
     .Call('_SAIGEQTL_applySigmaInvSMW_multiV_mat', PACKAGE = 'SAIGEQTL', Bmat)
 }
 
+gettI_Sigma_I_multiV_cached <- function() {
+    .Call('_SAIGEQTL_gettI_Sigma_I_multiV_cached', PACKAGE = 'SAIGEQTL')
+}
+
 clearSigmaInvSMWcache <- function() {
     invisible(.Call('_SAIGEQTL_clearSigmaInvSMWcache', PACKAGE = 'SAIGEQTL'))
 }

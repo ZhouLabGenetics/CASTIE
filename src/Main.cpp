@@ -5458,6 +5458,74 @@ arma::fmat applySigmaInvSMW_multiV_mat(arma::fmat& Bmat) {
     return Xmat;
 }
 
+// Cached variant of gettI_Sigma_I_multiV (Main.cpp:5217): builds the
+// donor-summed sparse matrix t(I_mat) * Sigma^-1 * I_mat using the cached
+// SMW factors. Sigma is block-diagonal across donors (Case 2), so the result
+// is also diagonal: column i has exactly one nonzero entry, at row i.
+// We exploit that here — only apply the cache to donor i's own block (the
+// rest is multiplied by zero) and emit one diagonal entry per donor.
+// Same output as the original gettI_Sigma_I_multiV up to the zero entries
+// that are dropped by the sparse conversion.
+// [[Rcpp::export]]
+arma::sp_fmat gettI_Sigma_I_multiV_cached() {
+    if (!g_smwCache_valid) {
+        Rcpp::stop("gettI_Sigma_I_multiV_cached called without a valid cache; "
+                   "call prepareSigmaInvSMW_multiV first.");
+    }
+    int uniqN = g_I_longl_mat.n_cols;
+    arma::fvec diag_vals(uniqN, arma::fill::zeros);
+
+#ifdef _OPENMP
+    omp_set_num_threads(g_omp_num_threads);
+    #pragma omp parallel for schedule(static)
+#endif
+    for (int j = 0; j < uniqN; j++) {
+        size_t start = g_I_start_indices[j];
+        size_t end   = g_I_start_indices[j+1];
+        int cells_in_individual = end - start;
+        if (cells_in_individual == 0) continue;
+
+        const SMWIndCache& C = g_smwCache_indCache[j];
+        // b_ind for donor j's indicator is all-ones over donor j's cells.
+        // Reproduce x_base_ind / correction_ind / x_ind exactly as
+        // applySigmaInvSMW_multiV does, but only for this one block.
+        arma::fvec x_base_ind;
+        if (C.tau1_zero) {
+            x_base_ind = C.w_inv_tau0;            // w_inv_tau0 % 1 == w_inv_tau0
+        } else {
+            float sum_wb       = arma::sum(C.w_ind);  // sum(w_ind * 1)
+            float corr_factor  = C.pre_factor_x_base * sum_wb;
+            x_base_ind = C.w_inv_tau0 - corr_factor * C.w_inv_tau0;
+        }
+        arma::fvec correction_ind = C.A_inv_U_ind * (C.middle_inv * (C.U_ind.t() * x_base_ind));
+        arma::fvec x_ind = x_base_ind - correction_ind;
+
+        // ISigma_iI(j, j) = sum over donor j's cells of x_ind (the I_mat^T
+        // row for donor j is 1 over those cells, 0 elsewhere). Off-diagonal
+        // entries are zero because Sigma^-1 is block-diagonal across donors.
+        diag_vals(j) = arma::sum(x_ind);
+    }
+
+    // Assemble sparse diagonal output (drop exact zeros to match the
+    // sparse-conversion behavior of the original function).
+    arma::uvec rows_loc(uniqN), cols_loc(uniqN);
+    arma::fvec vals(uniqN);
+    arma::uword nnz = 0;
+    for (int j = 0; j < uniqN; j++) {
+        if (diag_vals(j) != 0.0f) {
+            rows_loc(nnz) = (arma::uword)j;
+            cols_loc(nnz) = (arma::uword)j;
+            vals(nnz)     = diag_vals(j);
+            nnz++;
+        }
+    }
+    arma::umat locations(2, nnz);
+    locations.row(0) = rows_loc.head(nnz).t();
+    locations.row(1) = cols_loc.head(nnz).t();
+    arma::fvec values = vals.head(nnz);
+    return arma::sp_fmat(locations, values, uniqN, uniqN);
+}
+
 // [[Rcpp::export]]
 void clearSigmaInvSMWcache() {
     g_smwCache_valid = false;

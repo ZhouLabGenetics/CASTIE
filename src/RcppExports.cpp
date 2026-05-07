@@ -847,6 +847,16 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// gettI_Sigma_I_multiV_cached
+arma::sp_fmat gettI_Sigma_I_multiV_cached();
+RcppExport SEXP _SAIGEQTL_gettI_Sigma_I_multiV_cached() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(gettI_Sigma_I_multiV_cached());
+    return rcpp_result_gen;
+END_RCPP
+}
 // clearSigmaInvSMWcache
 void clearSigmaInvSMWcache();
 RcppExport SEXP _SAIGEQTL_clearSigmaInvSMWcache() {
@@ -2666,6 +2676,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_SAIGEQTL_prepareSigmaInvSMW_multiV", (DL_FUNC) &_SAIGEQTL_prepareSigmaInvSMW_multiV, 2},
     {"_SAIGEQTL_applySigmaInvSMW_multiV", (DL_FUNC) &_SAIGEQTL_applySigmaInvSMW_multiV, 1},
     {"_SAIGEQTL_applySigmaInvSMW_multiV_mat", (DL_FUNC) &_SAIGEQTL_applySigmaInvSMW_multiV_mat, 1},
+    {"_SAIGEQTL_gettI_Sigma_I_multiV_cached", (DL_FUNC) &_SAIGEQTL_gettI_Sigma_I_multiV_cached, 0},
     {"_SAIGEQTL_clearSigmaInvSMWcache", (DL_FUNC) &_SAIGEQTL_clearSigmaInvSMWcache, 0},
     {"_SAIGEQTL_fitglmmaiRPCG_multiV", (DL_FUNC) &_SAIGEQTL_fitglmmaiRPCG_multiV, 14},
     {"_SAIGEQTL_getMeanDiagofKmat", (DL_FUNC) &_SAIGEQTL_getMeanDiagofKmat, 1},

@@ -1265,7 +1265,9 @@ if(is.null(eMat)){
     W <- sqrtW^2
     W <- W * modglmm$varWeights
     tauVecNew <- modglmm$theta
+    .t_pp_sigmaiX <- proc.time()
     Sigma_iX <- getSigma_X_multiV(W, tauVecNew, modglmm$X, maxiterPCG, tolPCG, LOCO = FALSE)
+    cat(sprintf("[TIMING:PP] getSigma_X_multiV: %.2fs\n", (proc.time() - .t_pp_sigmaiX)[3]))
     if (!isShrinkModelOutput) {
       Sigma_iXXSigma_iX <- Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX))
       modglmm$Sigma_iXXSigma_iX <- Sigma_iXXSigma_iX
@@ -1287,18 +1289,23 @@ if(is.null(eMat)){
     # if(length(fit0$y) <= 10000){
 
     cat("isStoreSigma is ", isStoreSigma, "\n")
+    .t_pp_spsigma <- proc.time()
     if (isStoreSigma) {
-      # family = fit0$family
-      # eta = modglmm$linear.predictors
-      # mu = modglmm$fitted.values
-      # mu.eta = family$mu.eta(eta)
-      # sqrtW = mu.eta/sqrt(family$variance(mu))
-      # W = sqrtW^2
-      # W = W * modglmm$varWeights;
-      # tauVecNew = modglmm$theta
-      # Matrix::writeMM(spSigma, file="/humgen/atgu1/fin/wzhou/projects/eQTL_method_dev/realdata/oneK1K/AnnaCuomo_Yavar/saigeqtl_manuscript/realdata/step1/LSM10.CD4_NC.spSigma.mtx")
-      # if(any(duplicated(dataMerge_sort$IID))){
-      modglmm$spSigma <- gettI_Sigma_I_multiV(W, tauVecNew, maxiterPCG, tolPCG, LOCO = FALSE)
+      ## Try cached SMW Case 2 path: replaces n_donors full Case 2 setups with
+      ## one setup + n_donors cheap applies. Falls back to gettI_Sigma_I_multiV
+      ## if preconditions don't hold.
+      pp_smw_cached <- FALSE
+      if (!is.null(modglmm$eMat) && length(tauVecNew) >= 3 && tauVecNew[3] != 0) {
+        pp_smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+      }
+      if (pp_smw_cached) {
+        modglmm$spSigma <- gettI_Sigma_I_multiV_cached()
+        clearSigmaInvSMWcache()
+      } else {
+        modglmm$spSigma <- gettI_Sigma_I_multiV(W, tauVecNew, maxiterPCG, tolPCG, LOCO = FALSE)
+      }
+      cat(sprintf("[TIMING:PP] gettI_Sigma_I_multiV: %.2fs (cached=%s)\n",
+                  (proc.time() - .t_pp_spsigma)[3], pp_smw_cached))
       # }else{
       # 	gen_sp_Sigma_multiV(W, tauVecNew)
       # 	spSigma = get_sp_Sigma_to_R()
@@ -1445,7 +1452,9 @@ if(is.null(eMat)){
       # modglmm$I_longl_vec = b - 1
       # modglmm$T_longl_mat = I_mat * (dataMerge_sort$longlVar)
       modglmm$T_longl_vec <- dataMerge_sort$longlVar
+      .t_pp_save <- proc.time()
       save(modglmm, file = modelOut)
+      cat(sprintf("[TIMING:PP] save modglmm: %.2fs\n", (proc.time() - .t_pp_save)[3]))
     }
 
   if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 || (!modglmm$isCovariateOffset && any(modglmm$theta[2:length(modglmm$theta)] == 0))){
@@ -1475,8 +1484,10 @@ if(is.null(eMat)){
 
       subSampleInGeno_unique <- subSampleInGeno[!duplicated(subSampleInGeno)]
 
+      .t_pp_setgeno <- proc.time()
       # setgeno(bedFile, bimFile, famFile, subSampleInGeno, indicatorGenoSamplesWithPheno, memoryChunk, isDiagofKinSetAsOne)
       setgeno(bedFile, bimFile, famFile, subSampleInGeno_unique, indicatorGenoSamplesWithPheno, memoryChunk, isDiagofKinSetAsOne)
+      cat(sprintf("[TIMING:PP] setgeno: %.2fs\n", (proc.time() - .t_pp_setgeno)[3]))
     }
   } else {
     cat("Skip fitting the NULL GLMM\n")
