@@ -246,80 +246,92 @@ if(initialSubSampleProp < 1){
     }
 
 
-    ## check whether the phenotype file is large
-    cmd <- paste0("du ", phenoFile, "| awk '{print $1}' > ", outputPrefix, "_", phenoCol, "_size_temp")
-    system(cmd)
-    datasize <- data.table:::fread(paste0(outputPrefix, "_", phenoCol, "_size_temp"), header = F, data.table = F)
-    isphenoFileLarge <- FALSE
-    if (grepl(".gz$", phenoFile) | grepl(".bgz$", phenoFile)) {
-      if (datasize[1, 1] > 200000) {
-        isphenoFileLarge <- TRUE
-      }
+    ## read phenotype file — same optimized approach as fitNULLGLMM_multiV,
+    ## writes to the same cache file so the main fit can reuse it
+    isCompressed <- grepl("\\.(gz|bgz|zst)$", phenoFile)
+    isZstd <- grepl("\\.zst$", phenoFile)
+
+    if (isCompressed) {
+      fileSize_KB <- as.numeric(system(paste0("du -k ", phenoFile, " | cut -f1"), intern = TRUE))
+      isphenoFileLarge <- (fileSize_KB > 200000)
     } else {
-      if (datasize[1, 1] > 500000) {
-        isphenoFileLarge <- TRUE
+      fileSize_KB <- file.info(phenoFile)$size / 1024
+      isphenoFileLarge <- (fileSize_KB > 500000)
+    }
+
+    if (isCompressed) {
+      if (isZstd) {
+        dcatCmd <- "zstdcat"
+      } else if (system("command -v pigz > /dev/null 2>&1") == 0) {
+        dcatCmd <- "pigz -dc"
+      } else {
+        dcatCmd <- "gunzip -c"
       }
     }
 
     if (isphenoFileLarge) {
-      if (grepl(".gz$", phenoFile) | grepl(".bgz$", phenoFile)) {
-        cmd <- paste0("gunzip -c ", phenoFile, "| head -n 1 | sed 's/\\t/\\n/g' | sed 's/\ /\\n/g' | awk '{print $1\"\\t\"NR}' > ", outputPrefix, "_", phenoCol, "_lineNum_temp")
-        system(cmd)
+      ## same stable cache name used by fitNULLGLMM_multiV
+      phenoFiletemp <- file.path(dirname(outputPrefix),
+        paste0(".saige_subcols_", phenoCol, "_cache"))
+      if (!file.exists(phenoFiletemp)) {
+        if (isCompressed) {
+          firstLine <- system(paste0(dcatCmd, " ", phenoFile, " | head -n 1"), intern = TRUE)
+        } else {
+          firstLine <- readLines(phenoFile, n = 1)
+        }
+        if (grepl("\t", firstLine)) {
+          allCols <- strsplit(firstLine, "\t", fixed = TRUE)[[1]]
+          cutDelim <- ""
+          useAwk <- FALSE
+        } else if (grepl(",", firstLine)) {
+          allCols <- strsplit(firstLine, ",", fixed = TRUE)[[1]]
+          cutDelim <- " -d','"
+          useAwk <- FALSE
+        } else {
+          allCols <- strsplit(trimws(firstLine), "\\s+")[[1]]
+          useAwk <- TRUE
+        }
+        colIndices <- which(allCols %in% checkColList)
+
+        if (useAwk) {
+          awkFields <- paste0("$", colIndices, collapse = ",")
+          awkCmd <- paste0("awk 'BEGIN{OFS=\"\\t\"}{print ", awkFields, "}'")
+          if (isCompressed) {
+            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | ", awkCmd, " > ", phenoFiletemp))
+          } else {
+            system(paste0("LC_ALL=C ", awkCmd, " ", phenoFile, " > ", phenoFiletemp))
+          }
+        } else {
+          colIndicesStr <- paste(colIndices, collapse = ",")
+          if (isCompressed) {
+            system(paste0("LC_ALL=C ", dcatCmd, " ", phenoFile, " | cut", cutDelim, " -f ", colIndicesStr, " > ", phenoFiletemp))
+          } else {
+            system(paste0("LC_ALL=C cut", cutDelim, " -f ", colIndicesStr, " ", phenoFile, " > ", phenoFiletemp))
+          }
+        }
+        cat("Phenotype column cache created:", phenoFiletemp, "\n")
       } else {
-        cmd <- paste0("cat ", phenoFile, "| head -n 1 | sed 's/\\t/\\n/g' | sed 's/\ /\\n/g' | awk '{print $1\"\\t\"NR}' > ", outputPrefix, "_", phenoCol, "_lineNum_temp")
-        system(cmd)
+        cat("Reusing cached phenotype columns:", phenoFiletemp, "\n")
       }
-
-      # print(cmd)
-
-      checkColListDataFrame <- data.frame(colna = checkColList)
-      phenoFilephenoCol_lineNum <- data.table::fread(paste0(outputPrefix, "_", phenoCol, "_lineNum_temp"), header = F, data.table = F)
-
-      phenoFilephenoCol_lineNum_checkColList <- merge(checkColListDataFrame, phenoFilephenoCol_lineNum, by.x = 1, by.y = 1)
-
-      write.table(phenoFilephenoCol_lineNum_checkColList[, 2], paste0(outputPrefix, "_", phenoCol, "_colnames_subset_temp"), quote = F, col.names = F, row.names = F)
-
-
-      if (grepl(".gz$", phenoFile) | grepl(".bgz$", phenoFile)) {
-        cmdb <- paste0("cut -f $(tr '\\n' ',' < ", outputPrefix, "_", phenoCol, "_colnames_subset_temp | sed 's/,$//') <(gunzip -c", phenoFile, ")> ", outputPrefix, "_", phenoCol, "_subcols_temp")
-      } else {
-        cmdb <- paste0("cut -f $(tr '\\n' ',' < ", outputPrefix, "_", phenoCol, "_colnames_subset_temp | sed 's/,$//') ", phenoFile, "> ", outputPrefix, "_", phenoCol, "_subcols_temp")
-      }
-
-      # print(cmdb)
-      system(cmdb)
-
-      phenoFiletemp <- paste0(outputPrefix, "_", phenoCol, "_subcols_temp")
-
 
       data <- data.table:::fread(phenoFiletemp,
-        header = T,
-        stringsAsFactors = FALSE, colClasses = list(character = sampleIDColinphenoFile), data.table = F
+        header = T, stringsAsFactors = FALSE,
+        colClasses = list(character = sampleIDColinphenoFile), data.table = F
       )
-      # data = data.frame(ydat)
-
-      file.remove(paste0(outputPrefix, "_", phenoCol, "_colnames_subset_temp"))
-      file.remove(paste0(outputPrefix, "_", phenoCol, "_lineNum_temp"))
-      #file.remove(paste0(outputPrefix, "_", phenoCol, "_subcols_temp"))
-    } else { # !isphenoFileLarge
-
-      if (grepl(".gz$", phenoFile) | grepl(".bgz$", phenoFile)) {
+    } else {
+      if (isCompressed) {
         data <- data.table:::fread(
-          cmd = paste0(
-            "gunzip -c ",
-            phenoFile
-          ), header = T, stringsAsFactors = FALSE,
+          cmd = paste0(dcatCmd, " ", phenoFile),
+          header = T, stringsAsFactors = FALSE,
           colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
         )
       } else {
         data <- data.table:::fread(phenoFile,
-          header = T,
-          stringsAsFactors = FALSE, colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
+          header = T, stringsAsFactors = FALSE,
+          colClasses = list(character = sampleIDColinphenoFile), data.table = F, select = checkColList
         )
       }
     }
-
-    file.remove(paste0(outputPrefix, "_", phenoCol, "_size_temp"))
     ID = data[,which(colnames(data) == sampleIDColinphenoFile)]
 
 
@@ -1063,3 +1075,8 @@ if (step1_all_failed) {
               paste0(opt$outputPrefix_varRatio, ".varianceRatio.txt")))
     if (file.exists(f)) file.remove(f)
 }
+
+## clean up phenotype column cache created by fitNULLGLMM_multiV
+phenoCacheFile <- file.path(dirname(opt$outputPrefix),
+  paste0(".saige_subcols_", opt$phenoCol, "_cache"))
+if (file.exists(phenoCacheFile)) file.remove(phenoCacheFile)
