@@ -1666,6 +1666,11 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
   Sigma_iX_noLOCO <- getSigma_X_multiV(W, tauVecNew, X, maxiterPCG, tolPCG, LOCO = FALSE)
 
+  ## Hoist the constant pieces of the var1 / var1GE / I_21 quadratic form
+  ## (X and Sigma_iX_noLOCO don't change across markers or eMat columns) so
+  ## solve(t(X) %*% Sigma_iX) is computed once instead of per iteration.
+  XtSigma_iX     <- t(X) %*% Sigma_iX_noLOCO   # p x p
+  XtSigma_iX_inv <- solve(XtSigma_iX)          # p x p
 
   y <- obj.glmm.null$y
 
@@ -1901,7 +1906,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             Sigma_iG <- getSigma_G_multiV(W, tauVecNew, G, maxiterPCG, tolPCG, LOCO = FALSE)
             Sigma_iX <- Sigma_iX_noLOCO
 
-            var1 <- t(G) %*% Sigma_iG - t(G) %*% Sigma_iX %*% (solve(t(X) %*% Sigma_iX)) %*% t(X) %*% Sigma_iG
+            ## var1 = G' Sigma^-1 G - G' Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 G
+            ## Reorder so every intermediate is length-p (avoids the 1 x n
+            ## vector that the chained '%*%' form produces).  XtSigma_iX_inv
+            ## is hoisted to function scope above the marker loop.
+            GtSig_iG  <- as.numeric(crossprod(G, Sigma_iG))
+            GtSig_iX  <- as.vector(crossprod(G, Sigma_iX))     # length p
+            tX_Sig_iG <- as.vector(crossprod(X, Sigma_iG))     # length p (reused below for I_21)
+            var1      <- as.numeric(GtSig_iG - GtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
             cat("AC ", AC, "\n")
             S <- innerProduct(G, obj.glmm.null$residuals * var_weights)
             cat("S is ", S, "\n")
@@ -1948,8 +1960,12 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                 # obj.glmm.null$eMat[,ne] = GE_tilde
                 getildeMat <- cbind(getildeMat, GE_tilde)
 
-                Sigma_iGE <- getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
-                var1GE <- t(GE_tilde) %*% Sigma_iGE - t(GE_tilde) %*% Sigma_iX %*% (solve(t(X) %*% Sigma_iX)) %*% t(X) %*% Sigma_iGE
+                Sigma_iGE  <- getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
+                ## var1GE: same projection-residual form as var1, with GE_tilde / Sigma_iGE.
+                GEtSig_iGE <- as.numeric(crossprod(GE_tilde, Sigma_iGE))
+                GEtSig_iX  <- as.vector(crossprod(GE_tilde, Sigma_iX))   # length p (reused below for I_21)
+                tX_Sig_iGE <- as.vector(crossprod(X, Sigma_iGE))         # length p
+                var1GE     <- as.numeric(GEtSig_iGE - GEtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iGE)
 		var1GE_vec <- c(var1GE_vec, var1GE)
 		S_GE <- innerProduct(GE_tilde, obj.glmm.null$residuals * var_weights)
                 p_exact_GE <- pchisq(S_GE^2 / var1GE, df = 1, lower.tail = F)
@@ -1960,7 +1976,10 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 		# Donor-level contributions
 		I_11 <- var1
 		I_22 <- var1GE
-		I_21 <- t(GE_tilde) %*% Sigma_iG - t(GE_tilde) %*% Sigma_iX %*% (solve(t(X) %*% Sigma_iX)) %*% t(X) %*% Sigma_iG
+		## I_21 = GE_tilde' Sigma^-1 G - GE_tilde' Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 G
+		## Reuses GEtSig_iX (from var1GE) and tX_Sig_iG (from var1) above.
+		GEtSig_iG <- as.numeric(crossprod(GE_tilde, Sigma_iG))
+		I_21      <- as.numeric(GEtSig_iG - GEtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
 		varGEcondG_model <- I_22 - I_21^2 / I_11	
   		c_coeff <- I_21 / I_11
   		# Donor-level contributions
