@@ -11,8 +11,9 @@
 // Currently, omp does not work well, will check it later
 // error: SET_VECTOR_ELT() can only be applied to a 'list', not a 'character'
 // remove all Rcpp::List to check if it works
-// #include <omp.h>
-// // [[Rcpp::plugins(openmp)]]]
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #include "Main.hpp"
 #include "PLINK.hpp"
@@ -4816,57 +4817,34 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
                 xVec = (wVec / tauVec(0)) % bVec;
             } else {
                 auto n = g_I_start_indices.n_elem - 1;
-                bool use_parallel = (g_omp_num_threads > 1) && (n > 100);
+                float inv_tau0 = 1.0f / tauVec(0);
+                float tau1 = tauVec(1);
 
 #ifdef _OPENMP
-                if (use_parallel) {
-                    omp_set_num_threads(g_omp_num_threads);
-                    #pragma omp parallel for schedule(static)
-                    for (size_t j = 0; j < n; j++) {
-                        size_t start = g_I_start_indices[j];
-                        size_t end = g_I_start_indices[j+1];
-
-                        float sum_S = 0;
-                        float sum_delta_b = 0;
-
-                        for (size_t k = start; k < end; k++){
-                            sum_S += wVec(k);
-                            sum_delta_b += wVec(k) * bVec(k);
-                        }
-
-                        sum_S = 1 + tauVec(1) * (sum_S / tauVec(0));
-                        sum_delta_b /= tauVec(0);
-
-                        for (size_t k = start; k < end; k++){
-                            xVec(k) = (wVec(k) / tauVec(0)) * bVec(k) -
-                                      (tauVec(1) * ((wVec(k) / tauVec(0)) * sum_delta_b)) / sum_S;
-                        }
-                    }
-                } else {
+                omp_set_num_threads(g_omp_num_threads);
+                #pragma omp parallel for schedule(static)
 #endif
-                    for (size_t j = 0; j < n; j++) {
-                        size_t start = g_I_start_indices[j];
-                        size_t end = g_I_start_indices[j+1];
+                for (size_t j = 0; j < n; j++) {
+                    size_t start = g_I_start_indices[j];
+                    size_t end = g_I_start_indices[j+1];
 
-                        float sum_S = 0;
-                        float sum_delta_b = 0;
+                    float sum_S = 0;
+                    float sum_delta_b = 0;
 
-                        for (size_t k = start; k < end; k++){
-                            sum_S += wVec(k);
-                            sum_delta_b += wVec(k) * bVec(k);
-                        }
-
-                        sum_S = 1 + tauVec(1) * (sum_S / tauVec(0));
-                        sum_delta_b /= tauVec(0);
-
-                        for (size_t k = start; k < end; k++){
-                            xVec(k) = (wVec(k) / tauVec(0)) * bVec(k) -
-                                      (tauVec(1) * ((wVec(k) / tauVec(0)) * sum_delta_b)) / sum_S;
-                        }
+                    for (size_t k = start; k < end; k++){
+                        sum_S += wVec(k);
+                        sum_delta_b += wVec(k) * bVec(k);
                     }
-#ifdef _OPENMP
+
+                    sum_S = 1 + tau1 * (sum_S * inv_tau0);
+                    sum_delta_b *= inv_tau0;
+
+                    for (size_t k = start; k < end; k++){
+                        float w_inv_tau0 = wVec(k) * inv_tau0;
+                        xVec(k) = w_inv_tau0 * bVec(k) -
+                                  (tau1 * (w_inv_tau0 * sum_delta_b)) / sum_S;
+                    }
                 }
-#endif
             }
         } else if (!g_usePCG && g_EMat.n_rows > 0 && tauVec.n_elem >= 3 && tauVec(2) != 0) {
             // Case 2: E matrix present with non-zero τ[2], use Woodbury formula for low-rank update
@@ -5021,170 +4999,86 @@ arma::fvec getPCG1ofSigmaAndVector_multiV(arma::fvec& wVec,  arma::fvec& tauVec,
             }
             
             if (use_individual_woodbury) {
-                // Proceed with individual-level Woodbury optimization
+                // Individual-level Woodbury optimization
                 // Process each individual separately to minimize memory usage
-                //std::cout << "Using individual-level Woodbury optimization (k=" << k << ", N=" << Nnomissing << ")" << std::endl;
-                
                 auto n_individuals = g_I_start_indices.n_elem - 1;
-                bool use_parallel = (g_omp_num_threads > 1) && (n_individuals > 100);
+                float inv_tau0 = 1.0f / tauVec(0);
+                float tau1 = tauVec(1);
+                float sqrt_tau2 = std::sqrt(tauVec(2));
 
 #ifdef _OPENMP
-                if (use_parallel) {
-                    omp_set_num_threads(g_omp_num_threads);
-                    #pragma omp parallel for schedule(static)
-                    for (size_t j = 0; j < n_individuals; j++) {
-                        size_t start = g_I_start_indices[j];
-                        size_t end = g_I_start_indices[j+1];
-                        int cells_in_individual = end - start;
-                        
-                        if (cells_in_individual == 0) continue;
-                        
-                        // Extract data for this individual
-                        arma::fvec w_ind = wVec.subvec(start, end-1);
-                        arma::fvec b_ind = bVec.subvec(start, end-1);
-                        //arma::fmat E_ind = E_corrected.cols(start, end-1);  // k × cells_in_individual
-                        arma::fmat E_ind = g_EMat.rows(start, end-1).t();  // k × cells_in_individual
-                        
-                        // Step 1: Compute base solution A_ind^(-1) * b_ind
-                        arma::fvec x_base_ind(cells_in_individual);
-                        if (tauVec(1) == 0) {
-                            x_base_ind = (w_ind / tauVec(0)) % b_ind;
-                        } else {
-                            // Block structure for this individual: all cells belong to same individual
-                            float sum_w = arma::sum(w_ind);
-                            float sum_wb = arma::sum(w_ind % b_ind);
-                            float denominator = 1 + tauVec(1) * (sum_w / tauVec(0));
-                            float correction_factor = (tauVec(1) / tauVec(0)) * (sum_wb / tauVec(0)) / denominator;
-                            
-                            x_base_ind = (w_ind / tauVec(0)) % b_ind - correction_factor * (w_ind / tauVec(0));
-                        }
-                        
-                        // Step 2: Apply Woodbury correction for E matrix
-                        arma::fmat U_ind = std::sqrt(tauVec(2)) * E_ind.t();  // cells_in_individual × k
-                        arma::fmat V_ind = U_ind;  // Symmetric case
-                        
-                        // Compute A_ind^(-1) * U_ind
-                        arma::fmat A_inv_U_ind(cells_in_individual, k);
-                        for (int covar = 0; covar < k; covar++) {
-                            arma::fvec u_col = U_ind.col(covar);
-                            if (tauVec(1) == 0) {
-                                A_inv_U_ind.col(covar) = (w_ind / tauVec(0)) % u_col;
-                            } else {
-                                float sum_w = arma::sum(w_ind);
-                                float sum_wu = arma::sum(w_ind % u_col);
-                                float denominator = 1 + tauVec(1) * (sum_w / tauVec(0));
-                                float correction_factor = (tauVec(1) / tauVec(0)) * (sum_wu / tauVec(0)) / denominator;
-                                
-                                A_inv_U_ind.col(covar) = (w_ind / tauVec(0)) % u_col - correction_factor * (w_ind / tauVec(0));
-                            }
-                        }
-                        
-                        // Compute (I + V^T * A^(-1) * U)^(-1) - this is only k×k!
-                        arma::fmat VT_A_inv_U = V_ind.t() * A_inv_U_ind;
-                        arma::fmat I_k = arma::eye<arma::fmat>(k, k);
-                        arma::fmat middle_inv;
-                        
-                        try {
-                            middle_inv = arma::inv(I_k + VT_A_inv_U);
-                        } catch (...) {
-                            // Fallback to pseudo-inverse if singular
-                            middle_inv = arma::pinv(I_k + VT_A_inv_U);
-                        }
-                        
-                        // Apply Woodbury correction
-                        arma::fvec correction_ind = A_inv_U_ind * (middle_inv * (V_ind.t() * x_base_ind));
-                        arma::fvec x_ind = x_base_ind - correction_ind;
-                        
-                        // Copy result back to global vector
-                        for (size_t idx = start; idx < end; idx++) {
-                            xVec(idx) = x_ind(idx - start);
-                        }
-                    }
-                } else {
+                omp_set_num_threads(g_omp_num_threads);
+                #pragma omp parallel for schedule(static)
 #endif
-                    for (size_t j = 0; j < n_individuals; j++) {
-                        size_t start = g_I_start_indices[j];
-                        size_t end = g_I_start_indices[j+1];
-                        int cells_in_individual = end - start;
-                        
-                        if (cells_in_individual == 0) continue;
-                        
-                        // Extract data for this individual
-                        arma::fvec w_ind = wVec.subvec(start, end-1);
-                        arma::fvec b_ind = bVec.subvec(start, end-1);
-                        //arma::fmat E_ind = E_corrected.cols(start, end-1);  // k × cells_in_individual
-                        arma::fmat E_ind = g_EMat.rows(start, end-1).t();  // k × cells_in_individual
-                        
-                        // For this individual, the covariance is:
-                        // σ_ind = τ[0] * W_ind^(-1) + τ[1] * 1*1^T + τ[2] * 1*1^T ⊙ (E_ind^T * E_ind)
-                        // where 1*1^T is the all-ones matrix for this individual
-                        
-                        // Step 1: Compute base solution A_ind^(-1) * b_ind
-                        arma::fvec x_base_ind(cells_in_individual);
-                        if (tauVec(1) == 0) {
-                            x_base_ind = (w_ind / tauVec(0)) % b_ind;
-                        } else {
-                            // Block structure for this individual: all cells belong to same individual
-                            float sum_w = arma::sum(w_ind);
-                            float sum_wb = arma::sum(w_ind % b_ind);
-                            float denominator = 1 + tauVec(1) * (sum_w / tauVec(0));
-                            float correction_factor = (tauVec(1) / tauVec(0)) * (sum_wb / tauVec(0)) / denominator;
-                            
-                            x_base_ind = (w_ind / tauVec(0)) % b_ind - correction_factor * (w_ind / tauVec(0));
+                for (size_t j = 0; j < n_individuals; j++) {
+                    size_t start = g_I_start_indices[j];
+                    size_t end = g_I_start_indices[j+1];
+                    int cells_in_individual = end - start;
+
+                    if (cells_in_individual == 0) continue;
+
+                    // Extract data for this individual
+                    arma::fvec w_ind = wVec.subvec(start, end-1);
+                    arma::fvec b_ind = bVec.subvec(start, end-1);
+                    arma::fmat E_ind = g_EMat.rows(start, end-1).t();  // k × cells_in_individual
+
+                    // Precompute w_ind / tau0
+                    arma::fvec w_inv_tau0 = w_ind * inv_tau0;
+
+                    // Step 1: Compute base solution A_ind^(-1) * b_ind
+                    arma::fvec x_base_ind(cells_in_individual);
+                    if (tau1 == 0) {
+                        x_base_ind = w_inv_tau0 % b_ind;
+                    } else {
+                        float sum_w = arma::sum(w_ind);
+                        float sum_wb = arma::sum(w_ind % b_ind);
+                        float denominator = 1 + tau1 * (sum_w * inv_tau0);
+                        float correction_factor = (tau1 * inv_tau0) * (sum_wb * inv_tau0) / denominator;
+
+                        x_base_ind = w_inv_tau0 % b_ind - correction_factor * w_inv_tau0;
+                    }
+
+                    // Step 2: Apply Woodbury correction for E matrix
+                    // U = V = sqrt(τ[2]) * E_ind^T  (cells_in_individual × k)
+                    arma::fmat U_ind = sqrt_tau2 * E_ind.t();
+
+                    // Compute A_ind^(-1) * U_ind
+                    arma::fmat A_inv_U_ind(cells_in_individual, k);
+                    if (tau1 == 0) {
+                        for (int covar = 0; covar < k; covar++) {
+                            A_inv_U_ind.col(covar) = w_inv_tau0 % U_ind.col(covar);
                         }
-                        
-                        // Step 2: Apply Woodbury correction for E matrix
-                        // For this individual, E_ind^T * E_ind is k×k matrix
-                        arma::fmat EtE = E_ind.t() * E_ind;  // cells_in_individual × k × k × cells_in_individual → cells_in_individual × cells_in_individual
-                        
-                        // Build U and V for individual (both are cells_in_individual × k)
-                        arma::fmat U_ind(cells_in_individual, k);
-                        arma::fmat V_ind(cells_in_individual, k);
-                        
-                        // For individual j, U = V = sqrt(τ[2]) * E_ind^T
-                        U_ind = std::sqrt(tauVec(2)) * E_ind.t();
-                        V_ind = U_ind;  // Symmetric case
-                        
-                        // Compute A_ind^(-1) * U_ind
-                        arma::fmat A_inv_U_ind(cells_in_individual, k);
+                    } else {
+                        float sum_w = arma::sum(w_ind);
+                        float denominator = 1 + tau1 * (sum_w * inv_tau0);
+                        float factor = (tau1 * inv_tau0) * inv_tau0 / denominator;
                         for (int covar = 0; covar < k; covar++) {
                             arma::fvec u_col = U_ind.col(covar);
-                            if (tauVec(1) == 0) {
-                                A_inv_U_ind.col(covar) = (w_ind / tauVec(0)) % u_col;
-                            } else {
-                                float sum_w = arma::sum(w_ind);
-                                float sum_wu = arma::sum(w_ind % u_col);
-                                float denominator = 1 + tauVec(1) * (sum_w / tauVec(0));
-                                float correction_factor = (tauVec(1) / tauVec(0)) * (sum_wu / tauVec(0)) / denominator;
-                                
-                                A_inv_U_ind.col(covar) = (w_ind / tauVec(0)) % u_col - correction_factor * (w_ind / tauVec(0));
-                            }
-                        }
-                        
-                        // Compute (I + V^T * A^(-1) * U)^(-1) - this is only k×k!
-                        arma::fmat VT_A_inv_U = V_ind.t() * A_inv_U_ind;
-                        arma::fmat I_k = arma::eye<arma::fmat>(k, k);
-                        arma::fmat middle_inv;
-                        
-                        try {
-                            middle_inv = arma::inv(I_k + VT_A_inv_U);
-                        } catch (...) {
-                            // Fallback to pseudo-inverse if singular
-                            middle_inv = arma::pinv(I_k + VT_A_inv_U);
-                        }
-                        
-                        // Apply Woodbury correction
-                        arma::fvec correction_ind = A_inv_U_ind * (middle_inv * (V_ind.t() * x_base_ind));
-                        arma::fvec x_ind = x_base_ind - correction_ind;
-                        
-                        // Copy result back to global vector
-                        for (size_t idx = start; idx < end; idx++) {
-                            xVec(idx) = x_ind(idx - start);
+                            float sum_wu = arma::sum(w_ind % u_col);
+                            A_inv_U_ind.col(covar) = w_inv_tau0 % u_col - (factor * sum_wu) * w_inv_tau0;
                         }
                     }
-#ifdef _OPENMP
+
+                    // Compute (I + V^T * A^(-1) * U)^(-1) - this is only k×k!
+                    arma::fmat VT_A_inv_U = U_ind.t() * A_inv_U_ind;  // V = U (symmetric)
+                    arma::fmat I_k = arma::eye<arma::fmat>(k, k);
+                    arma::fmat middle_inv;
+
+                    try {
+                        middle_inv = arma::inv(I_k + VT_A_inv_U);
+                    } catch (...) {
+                        middle_inv = arma::pinv(I_k + VT_A_inv_U);
+                    }
+
+                    // Apply Woodbury correction
+                    arma::fvec correction_ind = A_inv_U_ind * (middle_inv * (U_ind.t() * x_base_ind));
+                    arma::fvec x_ind = x_base_ind - correction_ind;
+
+                    // Copy result back to global vector
+                    for (size_t idx = start; idx < end; idx++) {
+                        xVec(idx) = x_ind(idx - start);
+                    }
                 }
-#endif
             }
             
         } else {
@@ -6851,57 +6745,34 @@ arma::fvec getPCG1ofSigmaAndVector_noV(arma::fvec& wVec,  arma::fvec& tauVec, ar
         } else {
             // Block structure optimization using Sherman-Morrison-Woodbury formula
             auto n = g_I_start_indices.n_elem - 1;
-            bool use_parallel = (g_omp_num_threads > 1) && (n > 100);
+            float inv_tau0 = 1.0f / tauVec(0);
+            float tau1 = tauVec(1);
 
 #ifdef _OPENMP
-            if (use_parallel) {
-                omp_set_num_threads(g_omp_num_threads);
-                #pragma omp parallel for schedule(static)
-                for (size_t j = 0; j < n; j++) {
-                    size_t start = g_I_start_indices[j];
-                    size_t end = g_I_start_indices[j+1];
-
-                    float sum_S = 0;
-                    float sum_delta_b = 0;
-
-                    for (size_t k = start; k < end; k++){
-                        sum_S += wVec(k);
-                        sum_delta_b += wVec(k) * bVec(k);
-                    }
-
-                    sum_S = 1 + tauVec(1) * (sum_S / tauVec(0));
-                    sum_delta_b /= tauVec(0);
-
-                    for (size_t k = start; k < end; k++){
-                        xVec(k) = (wVec(k) / tauVec(0)) * bVec(k) -
-                                  (tauVec(1) * ((wVec(k) / tauVec(0)) * sum_delta_b)) / sum_S;
-                    }
-                }
-            } else {
+            omp_set_num_threads(g_omp_num_threads);
+            #pragma omp parallel for schedule(static)
 #endif
-                for (size_t j = 0; j < n; j++) {
-                    size_t start = g_I_start_indices[j];
-                    size_t end = g_I_start_indices[j+1];
+            for (size_t j = 0; j < n; j++) {
+                size_t start = g_I_start_indices[j];
+                size_t end = g_I_start_indices[j+1];
 
-                    float sum_S = 0;
-                    float sum_delta_b = 0;
+                float sum_S = 0;
+                float sum_delta_b = 0;
 
-                    for (size_t k = start; k < end; k++){
-                        sum_S += wVec(k);
-                        sum_delta_b += wVec(k) * bVec(k);
-                    }
-
-                    sum_S = 1 + tauVec(1) * (sum_S / tauVec(0));
-                    sum_delta_b /= tauVec(0);
-
-                    for (size_t k = start; k < end; k++){
-                        xVec(k) = (wVec(k) / tauVec(0)) * bVec(k) -
-                                  (tauVec(1) * ((wVec(k) / tauVec(0)) * sum_delta_b)) / sum_S;
-                    }
+                for (size_t k = start; k < end; k++){
+                    sum_S += wVec(k);
+                    sum_delta_b += wVec(k) * bVec(k);
                 }
-#ifdef _OPENMP
+
+                sum_S = 1 + tau1 * (sum_S * inv_tau0);
+                sum_delta_b *= inv_tau0;
+
+                for (size_t k = start; k < end; k++){
+                    float w_inv_tau0 = wVec(k) * inv_tau0;
+                    xVec(k) = w_inv_tau0 * bVec(k) -
+                              (tau1 * (w_inv_tau0 * sum_delta_b)) / sum_S;
+                }
             }
-#endif
         }
 }
         return(xVec);
@@ -6935,57 +6806,33 @@ arma::fvec getPCG1ofSigmaAndVector_V(arma::fvec& wVec,  float tauVal, float tauV
         } else {
             // Block structure optimization using Sherman-Morrison-Woodbury formula
             auto n = g_I_start_indices.n_elem - 1;
-            bool use_parallel = (g_omp_num_threads > 1) && (n > 100);
+            float inv_tau0 = 1.0f / tauVal0;
 
 #ifdef _OPENMP
-            if (use_parallel) {
-                omp_set_num_threads(g_omp_num_threads);
-                #pragma omp parallel for schedule(static)
-                for (size_t j = 0; j < n; j++) {
-                    size_t start = g_I_start_indices[j];
-                    size_t end = g_I_start_indices[j+1];
-
-                    float sum_S = 0;
-                    float sum_delta_b = 0;
-
-                    for (size_t k = start; k < end; k++){
-                        sum_S += wVec(k);
-                        sum_delta_b += wVec(k) * bVec(k);
-                    }
-
-                    sum_S = 1 + tauVal * (sum_S / tauVal0);
-                    sum_delta_b /= tauVal0;
-
-                    for (size_t k = start; k < end; k++){
-                        xVec(k) = (wVec(k) / tauVal0) * bVec(k) -
-                                  (tauVal * ((wVec(k) / tauVal0) * sum_delta_b)) / sum_S;
-                    }
-                }
-            } else {
+            omp_set_num_threads(g_omp_num_threads);
+            #pragma omp parallel for schedule(static)
 #endif
-                for (size_t j = 0; j < n; j++) {
-                    size_t start = g_I_start_indices[j];
-                    size_t end = g_I_start_indices[j+1];
+            for (size_t j = 0; j < n; j++) {
+                size_t start = g_I_start_indices[j];
+                size_t end = g_I_start_indices[j+1];
 
-                    float sum_S = 0;
-                    float sum_delta_b = 0;
+                float sum_S = 0;
+                float sum_delta_b = 0;
 
-                    for (size_t k = start; k < end; k++){
-                        sum_S += wVec(k);
-                        sum_delta_b += wVec(k) * bVec(k);
-                    }
-
-                    sum_S = 1 + tauVal * (sum_S / tauVal0);
-                    sum_delta_b /= tauVal0;
-
-                    for (size_t k = start; k < end; k++){
-                        xVec(k) = (wVec(k) / tauVal0) * bVec(k) -
-                                  (tauVal * ((wVec(k) / tauVal0) * sum_delta_b)) / sum_S;
-                    }
+                for (size_t k = start; k < end; k++){
+                    sum_S += wVec(k);
+                    sum_delta_b += wVec(k) * bVec(k);
                 }
-#ifdef _OPENMP
+
+                sum_S = 1 + tauVal * (sum_S * inv_tau0);
+                sum_delta_b *= inv_tau0;
+
+                for (size_t k = start; k < end; k++){
+                    float w_inv_tau0 = wVec(k) * inv_tau0;
+                    xVec(k) = w_inv_tau0 * bVec(k) -
+                              (tauVal * (w_inv_tau0 * sum_delta_b)) / sum_S;
+                }
             }
-#endif
         }
 }
         return(xVec);
@@ -8667,44 +8514,35 @@ arma::fvec getCrossprodMatAndI_eMat_Imat(arma::fcolvec& bVec, bool LOCO){
 // [[Rcpp::export]]
 arma::fvec getCrossprodMatAndI_eMat_Imat(arma::fcolvec& bVec, bool LOCO) {
 	arma::fcolvec crossProdVec(bVec.n_elem, arma::fill::zeros);
+	auto n = g_I_start_indices.n_elem - 1;
+	unsigned int m = g_EEt_eigenvalVec.n_elem;
+	const float* bPtr = bVec.memptr();
+	float* rPtr = crossProdVec.memptr();
+
+#ifdef _OPENMP
 	omp_set_num_threads(g_omp_num_threads);
+	#pragma omp parallel for schedule(static)
+#endif
+	for(size_t j = 0; j < n; j++) {
+		size_t start = g_I_start_indices[j];
+		size_t end = g_I_start_indices[j + 1];
+		size_t block_size = end - start;
 
-         // arma::vec timeoutput1 = getTime();
+		// Process all eigenvalues for this individual (better cache locality)
+		for(unsigned int i = 0; i < m; i++) {
+			const float* ePtr = g_EEt_sqrtEigenMat.colptr(i) + start;
+			const float* bLocal = bPtr + start;
+			float* rLocal = rPtr + start;
 
-	//for(int j = 0; j < 10; j++){
-        //	std::cout << "bVec[j] " << bVec[j] << std::endl;
-	//}
-
-	
-    auto n = g_I_start_indices.n_elem - 1;
-    #pragma omp parallel
-    {
-        //arma::fcolvec temp(bVec.n_elem, arma::fill::zeros);  // Thread-local accumulator
-        auto thread_idx = omp_get_thread_num();
-        auto g_omp_num_threads = omp_get_num_threads();
-        for(unsigned int i = 0; i < g_EEt_eigenvalVec.n_elem; i++) {
-            for(int j = thread_idx; j < n; j += g_omp_num_threads) {
-                float sum = 0;
-                size_t start = g_I_start_indices[j];
-                size_t end = g_I_start_indices[j + 1];
-                for(size_t k = start; k < end; k++) {
-                    sum += g_EEt_sqrtEigenMat.at(k, i) * bVec[k];
-                }
-                for(size_t k = start; k < end; k++) {
-                    crossProdVec[k] += g_EEt_sqrtEigenMat.at(k, i) * sum;
-                }
-            }
-        }
-        //for(int j = thread_idx; j < n; j += g_omp_num_threads) {
-        //    for(int k = g_I_start_indices[j]; k < g_I_start_indices[j + 1]; k++) {
-        //        crossProdVec[k] = temp[k];
-        //    }
-        //}
-    }
-
-
-//	   arma::vec timeoutput2 = getTime();
-//	   printTime(timeoutput1, timeoutput2, "getCrossprodMatAndI_eMat_Imat");
+			float sum = 0;
+			for(size_t k = 0; k < block_size; k++) {
+				sum += ePtr[k] * bLocal[k];
+			}
+			for(size_t k = 0; k < block_size; k++) {
+				rLocal[k] += ePtr[k] * sum;
+			}
+		}
+	}
 	return crossProdVec;
 }
 
@@ -9635,23 +9473,25 @@ g_omp_num_threads = t_omp_num_threads;
 
 // [[Rcpp::export]]
 arma::fvec getprodImatImattbVec(arma::fvec & bVec){
-	omp_set_num_threads(g_omp_num_threads);
 	auto n = g_I_start_indices.n_elem - 1;
 	arma::fvec resultVec(bVec.n_elem, arma::fill::zeros);
-        #pragma omp parallel
-	{
-        	auto thread_idx = omp_get_thread_num();
-            	for(int j = thread_idx; j < n; j += g_omp_num_threads) {
-                	float sum = 0;
-                	size_t start = g_I_start_indices[j];
-                	size_t end = g_I_start_indices[j + 1];
-                	for(size_t k = start; k < end; k++) {
-                    		sum += bVec[k];
-                	}
-                	for(size_t k = start; k < end; k++) {
-                    		resultVec[k] += sum;
-                	}
-            	}
-        }
+	const float* bPtr = bVec.memptr();
+	float* rPtr = resultVec.memptr();
+
+#ifdef _OPENMP
+	omp_set_num_threads(g_omp_num_threads);
+	#pragma omp parallel for schedule(static)
+#endif
+	for(size_t j = 0; j < n; j++) {
+		size_t start = g_I_start_indices[j];
+		size_t end = g_I_start_indices[j + 1];
+		float sum = 0;
+		for(size_t k = start; k < end; k++) {
+			sum += bPtr[k];
+		}
+		for(size_t k = start; k < end; k++) {
+			rPtr[k] = sum;
+		}
+	}
 	return(resultVec);
 }
