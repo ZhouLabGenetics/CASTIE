@@ -813,6 +813,49 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// prepareSigmaInvSMW_multiV
+bool prepareSigmaInvSMW_multiV(arma::fvec& wVec, arma::fvec& tauVec);
+RcppExport SEXP _SAIGEQTL_prepareSigmaInvSMW_multiV(SEXP wVecSEXP, SEXP tauVecSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::fvec& >::type wVec(wVecSEXP);
+    Rcpp::traits::input_parameter< arma::fvec& >::type tauVec(tauVecSEXP);
+    rcpp_result_gen = Rcpp::wrap(prepareSigmaInvSMW_multiV(wVec, tauVec));
+    return rcpp_result_gen;
+END_RCPP
+}
+// applySigmaInvSMW_multiV
+arma::fvec applySigmaInvSMW_multiV(arma::fvec& bVec);
+RcppExport SEXP _SAIGEQTL_applySigmaInvSMW_multiV(SEXP bVecSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::fvec& >::type bVec(bVecSEXP);
+    rcpp_result_gen = Rcpp::wrap(applySigmaInvSMW_multiV(bVec));
+    return rcpp_result_gen;
+END_RCPP
+}
+// applySigmaInvSMW_multiV_mat
+arma::fmat applySigmaInvSMW_multiV_mat(arma::fmat& Bmat);
+RcppExport SEXP _SAIGEQTL_applySigmaInvSMW_multiV_mat(SEXP BmatSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::fmat& >::type Bmat(BmatSEXP);
+    rcpp_result_gen = Rcpp::wrap(applySigmaInvSMW_multiV_mat(Bmat));
+    return rcpp_result_gen;
+END_RCPP
+}
+// clearSigmaInvSMWcache
+void clearSigmaInvSMWcache();
+RcppExport SEXP _SAIGEQTL_clearSigmaInvSMWcache() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    clearSigmaInvSMWcache();
+    return R_NilValue;
+END_RCPP
+}
 // fitglmmaiRPCG_multiV
 Rcpp::List fitglmmaiRPCG_multiV(arma::fvec& Yvec, arma::fmat& Xmat, arma::fvec& wVec, arma::fvec& tauVec, arma::ivec& fixtauVec, arma::fvec& Sigma_iY, arma::fmat& Sigma_iX, arma::fmat& cov, int nrun, int maxiterPCG, float tolPCG, float tol, float traceCVcutoff, bool LOCO);
 RcppExport SEXP _SAIGEQTL_fitglmmaiRPCG_multiV(SEXP YvecSEXP, SEXP XmatSEXP, SEXP wVecSEXP, SEXP tauVecSEXP, SEXP fixtauVecSEXP, SEXP Sigma_iYSEXP, SEXP Sigma_iXSEXP, SEXP covSEXP, SEXP nrunSEXP, SEXP maxiterPCGSEXP, SEXP tolPCGSEXP, SEXP tolSEXP, SEXP traceCVcutoffSEXP, SEXP LOCOSEXP) {
@@ -2620,6 +2663,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_SAIGEQTL_getSigma_X_multiV", (DL_FUNC) &_SAIGEQTL_getSigma_X_multiV, 6},
     {"_SAIGEQTL_gettI_Sigma_I_multiV", (DL_FUNC) &_SAIGEQTL_gettI_Sigma_I_multiV, 5},
     {"_SAIGEQTL_getSigma_G_multiV", (DL_FUNC) &_SAIGEQTL_getSigma_G_multiV, 6},
+    {"_SAIGEQTL_prepareSigmaInvSMW_multiV", (DL_FUNC) &_SAIGEQTL_prepareSigmaInvSMW_multiV, 2},
+    {"_SAIGEQTL_applySigmaInvSMW_multiV", (DL_FUNC) &_SAIGEQTL_applySigmaInvSMW_multiV, 1},
+    {"_SAIGEQTL_applySigmaInvSMW_multiV_mat", (DL_FUNC) &_SAIGEQTL_applySigmaInvSMW_multiV_mat, 1},
+    {"_SAIGEQTL_clearSigmaInvSMWcache", (DL_FUNC) &_SAIGEQTL_clearSigmaInvSMWcache, 0},
     {"_SAIGEQTL_fitglmmaiRPCG_multiV", (DL_FUNC) &_SAIGEQTL_fitglmmaiRPCG_multiV, 14},
     {"_SAIGEQTL_getMeanDiagofKmat", (DL_FUNC) &_SAIGEQTL_getMeanDiagofKmat, 1},
     {"_SAIGEQTL_getAIScore_multiV", (DL_FUNC) &_SAIGEQTL_getAIScore_multiV, 13},

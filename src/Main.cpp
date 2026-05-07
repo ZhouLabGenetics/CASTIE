@@ -5244,6 +5244,228 @@ arma::fvec  getSigma_G_multiV(arma::fvec& wVec, arma::fvec& tauVec,arma::fvec& G
 }
 
 
+// ===========================================================================
+// SMW Case 2 cached solver (additive; does not change Cases 1/3 behavior).
+//
+// `getPCG1ofSigmaAndVector_multiV` Case 2 (individual-level Woodbury, lines
+// ~5001-5082) recomputes the per-individual factors (w_inv_tau0, U_ind,
+// A_inv_U_ind, middle_inv) on every call, even though they only depend on
+// (W, tauVec, EMat, I_start_indices) - all constant across the
+// variance-ratio marker loop. We split that into two entry points so
+// the setup runs once and the per-RHS apply is cheap:
+//
+//   prepareSigmaInvSMW_multiV(W, tauVec)  - one-time setup, fills cache;
+//                                            returns false if Case 2
+//                                            preconditions don't hold
+//                                            (caller falls back to PCG path).
+//   applySigmaInvSMW_multiV(bVec)         - applies cached factors to one RHS.
+//   clearSigmaInvSMWcache()               - drops cached factors.
+//
+// Bit-for-bit equivalent to `getSigma_G_multiV` Case 2 individual-Woodbury
+// path; uses the same Armadillo ops in the same order.
+// ===========================================================================
+
+struct SMWIndCache {
+    arma::fvec w_ind;             // length cells_in_individual
+    arma::fvec w_inv_tau0;        // length cells_in_individual
+    arma::fmat U_ind;             // cells_in_individual x k
+    arma::fmat A_inv_U_ind;       // cells_in_individual x k
+    arma::fmat middle_inv;        // k x k
+    float      pre_factor_x_base; // tau1 * inv_tau0^2 / denominator (only if !tau1_zero)
+    bool       tau1_zero;
+};
+
+bool                       g_smwCache_valid = false;
+std::vector<SMWIndCache>   g_smwCache_indCache;
+
+// [[Rcpp::export]]
+bool prepareSigmaInvSMW_multiV(arma::fvec& wVec, arma::fvec& tauVec) {
+    g_smwCache_valid = false;
+    g_smwCache_indCache.clear();
+
+    // Mirror the Case 2 preconditions in getPCG1ofSigmaAndVector_multiV.
+    if (g_isStoreSigma)               return false;
+    if (g_usePCG)                     return false;
+    if (g_EMat.n_rows == 0)           return false;
+    if (tauVec.n_elem < 3)            return false;
+    if (tauVec(2) == 0)               return false;
+    if (g_I_start_indices.n_elem < 2) return false;
+
+    int Nnomissing = wVec.n_elem;
+    int k_raw  = g_EMat.n_rows;
+    int k_cols = g_EMat.n_cols;
+    int k;
+    if (k_cols == Nnomissing) {
+        k = k_raw;
+    } else if (k_raw == Nnomissing) {
+        k = k_cols;
+    } else {
+        return false;  // dim mismatch -> caller falls back
+    }
+    // The streaming-rank-1 path (k >= 100) is rare and not cached here.
+    if (k >= 100) return false;
+
+    auto n_individuals = g_I_start_indices.n_elem - 1;
+    g_smwCache_indCache.resize(n_individuals);
+
+    float inv_tau0  = 1.0f / tauVec(0);
+    float tau1      = tauVec(1);
+    float sqrt_tau2 = std::sqrt(tauVec(2));
+
+#ifdef _OPENMP
+    omp_set_num_threads(g_omp_num_threads);
+    #pragma omp parallel for schedule(static)
+#endif
+    for (size_t j = 0; j < n_individuals; j++) {
+        size_t start = g_I_start_indices[j];
+        size_t end   = g_I_start_indices[j+1];
+        int cells_in_individual = end - start;
+        SMWIndCache& C = g_smwCache_indCache[j];
+        if (cells_in_individual == 0) continue;
+
+        C.w_ind       = wVec.subvec(start, end-1);
+        C.w_inv_tau0  = C.w_ind * inv_tau0;
+        // E_ind is k x cells_in_individual; U_ind is cells_in_individual x k.
+        arma::fmat E_ind = g_EMat.rows(start, end-1).t();
+        C.U_ind       = sqrt_tau2 * E_ind.t();
+
+        C.A_inv_U_ind.set_size(cells_in_individual, k);
+        if (tau1 == 0) {
+            C.tau1_zero = true;
+            C.pre_factor_x_base = 0.0f;
+            for (int covar = 0; covar < k; covar++) {
+                C.A_inv_U_ind.col(covar) = C.w_inv_tau0 % C.U_ind.col(covar);
+            }
+        } else {
+            C.tau1_zero = false;
+            float sum_w        = arma::sum(C.w_ind);
+            float denominator  = 1.0f + tau1 * (sum_w * inv_tau0);
+            float factor_for_AU = (tau1 * inv_tau0) * inv_tau0 / denominator;
+            C.pre_factor_x_base = factor_for_AU;
+            for (int covar = 0; covar < k; covar++) {
+                arma::fvec u_col = C.U_ind.col(covar);
+                float sum_wu = arma::sum(C.w_ind % u_col);
+                C.A_inv_U_ind.col(covar) =
+                    C.w_inv_tau0 % u_col - (factor_for_AU * sum_wu) * C.w_inv_tau0;
+            }
+        }
+
+        arma::fmat VT_A_inv_U = C.U_ind.t() * C.A_inv_U_ind;
+        arma::fmat I_k = arma::eye<arma::fmat>(k, k);
+        try {
+            C.middle_inv = arma::inv(I_k + VT_A_inv_U);
+        } catch (...) {
+            C.middle_inv = arma::pinv(I_k + VT_A_inv_U);
+        }
+    }
+
+    g_smwCache_valid = true;
+    return true;
+}
+
+// [[Rcpp::export]]
+arma::fvec applySigmaInvSMW_multiV(arma::fvec& bVec) {
+    if (!g_smwCache_valid) {
+        Rcpp::stop("applySigmaInvSMW_multiV called without a valid cache; "
+                   "call prepareSigmaInvSMW_multiV first.");
+    }
+    int Nnomissing = bVec.n_elem;
+    arma::fvec xVec(Nnomissing, arma::fill::zeros);
+
+    auto n_individuals = g_I_start_indices.n_elem - 1;
+
+#ifdef _OPENMP
+    omp_set_num_threads(g_omp_num_threads);
+    #pragma omp parallel for schedule(static)
+#endif
+    for (size_t j = 0; j < n_individuals; j++) {
+        size_t start = g_I_start_indices[j];
+        size_t end   = g_I_start_indices[j+1];
+        int cells_in_individual = end - start;
+        if (cells_in_individual == 0) continue;
+
+        const SMWIndCache& C = g_smwCache_indCache[j];
+        arma::fvec b_ind = bVec.subvec(start, end-1);
+
+        arma::fvec x_base_ind;
+        if (C.tau1_zero) {
+            x_base_ind = C.w_inv_tau0 % b_ind;
+        } else {
+            float sum_wb       = arma::sum(C.w_ind % b_ind);
+            float corr_factor  = C.pre_factor_x_base * sum_wb;
+            x_base_ind = C.w_inv_tau0 % b_ind - corr_factor * C.w_inv_tau0;
+        }
+
+        arma::fvec correction_ind = C.A_inv_U_ind * (C.middle_inv * (C.U_ind.t() * x_base_ind));
+        arma::fvec x_ind = x_base_ind - correction_ind;
+
+        for (size_t idx = start; idx < end; idx++) {
+            xVec(idx) = x_ind(idx - start);
+        }
+    }
+
+    return xVec;
+}
+
+// Batched matrix-RHS variant: computes Sigma^-1 * Bmat using the cache.
+// Used to replace getSigma_X_multiV's per-column loop (which calls
+// getPCG1ofSigmaAndVector_multiV once per column = full Case 2 setup per column).
+// Here we set up factors once via prepareSigmaInvSMW_multiV and apply to all
+// columns from a single OMP region per column (no nested OMP, no repeated setup).
+// [[Rcpp::export]]
+arma::fmat applySigmaInvSMW_multiV_mat(arma::fmat& Bmat) {
+    if (!g_smwCache_valid) {
+        Rcpp::stop("applySigmaInvSMW_multiV_mat called without a valid cache; "
+                   "call prepareSigmaInvSMW_multiV first.");
+    }
+    int nrows = Bmat.n_rows;
+    int ncols = Bmat.n_cols;
+    arma::fmat Xmat(nrows, ncols, arma::fill::zeros);
+
+    auto n_individuals = g_I_start_indices.n_elem - 1;
+
+    for (int c = 0; c < ncols; c++) {
+        arma::fvec b_col = Bmat.col(c);
+#ifdef _OPENMP
+        omp_set_num_threads(g_omp_num_threads);
+        #pragma omp parallel for schedule(static)
+#endif
+        for (size_t j = 0; j < n_individuals; j++) {
+            size_t start = g_I_start_indices[j];
+            size_t end   = g_I_start_indices[j+1];
+            int cells_in_individual = end - start;
+            if (cells_in_individual == 0) continue;
+
+            const SMWIndCache& C = g_smwCache_indCache[j];
+            arma::fvec b_ind = b_col.subvec(start, end-1);
+
+            arma::fvec x_base_ind;
+            if (C.tau1_zero) {
+                x_base_ind = C.w_inv_tau0 % b_ind;
+            } else {
+                float sum_wb       = arma::sum(C.w_ind % b_ind);
+                float corr_factor  = C.pre_factor_x_base * sum_wb;
+                x_base_ind = C.w_inv_tau0 % b_ind - corr_factor * C.w_inv_tau0;
+            }
+            arma::fvec correction_ind = C.A_inv_U_ind * (C.middle_inv * (C.U_ind.t() * x_base_ind));
+            arma::fvec x_ind = x_base_ind - correction_ind;
+
+            for (size_t idx = start; idx < end; idx++) {
+                Xmat(idx, c) = x_ind(idx - start);
+            }
+        }
+    }
+    return Xmat;
+}
+
+// [[Rcpp::export]]
+void clearSigmaInvSMWcache() {
+    g_smwCache_valid = false;
+    g_smwCache_indCache.clear();
+    g_smwCache_indCache.shrink_to_fit();
+}
+
+
 // [[Rcpp::export]]
 Rcpp::List fitglmmaiRPCG_multiV(arma::fvec& Yvec, arma::fmat& Xmat, arma::fvec &wVec,  arma::fvec & tauVec, arma::ivec & fixtauVec, arma::fvec& Sigma_iY, arma::fmat & Sigma_iX, arma::fmat & cov,
 int nrun, int maxiterPCG, float tolPCG, float tol, float traceCVcutoff, bool LOCO){

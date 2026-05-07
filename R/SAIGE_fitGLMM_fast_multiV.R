@@ -1664,7 +1664,23 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   # useSparseGRMforVarRatio = FALSE
   # }
 
-  Sigma_iX_noLOCO <- getSigma_X_multiV(W, tauVecNew, X, maxiterPCG, tolPCG, LOCO = FALSE)
+  ## Try to enable cached SMW (Case 2) solver for ALL Sigma^-1 calls inside this
+  ## function (Sigma_iX_noLOCO + per-marker Sigma_iG / Sigma_iGE).
+  ## Falls back to getSigma_X_multiV / getSigma_G_multiV (which still route to
+  ## their own Case 2 / 3) if preconditions don't hold.
+  smw_cached <- FALSE
+  if (!is.null(obj.glmm.null$eMat) && length(tauVecNew) >= 3 && tauVecNew[3] != 0) {
+    smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+  }
+  on.exit(if (smw_cached) clearSigmaInvSMWcache(), add = TRUE)
+  cat(sprintf("SMW cache for variance-ratio Sigma^-1 calls: %s\n",
+              if (smw_cached) "ENABLED" else "disabled (falling back to getSigma_X/G_multiV)"))
+
+  Sigma_iX_noLOCO <- if (smw_cached) {
+    applySigmaInvSMW_multiV_mat(X)
+  } else {
+    getSigma_X_multiV(W, tauVecNew, X, maxiterPCG, tolPCG, LOCO = FALSE)
+  }
 
   ## Hoist the constant pieces of the var1 / var1GE / I_21 quadratic form
   ## (X and Sigma_iX_noLOCO don't change across markers or eMat columns) so
@@ -1889,7 +1905,11 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             set_useGRMtoFitNULL(useGRMtoFitNULL)
 
 
-            Sigma_iG <- getSigma_G_multiV(W, tauVecNew, G, maxiterPCG, tolPCG, LOCO = FALSE)
+            Sigma_iG <- if (smw_cached) {
+              applySigmaInvSMW_multiV(G)
+            } else {
+              getSigma_G_multiV(W, tauVecNew, G, maxiterPCG, tolPCG, LOCO = FALSE)
+            }
             Sigma_iX <- Sigma_iX_noLOCO
 
             ## var1 = G' Sigma^-1 G - G' Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 G
@@ -1933,7 +1953,11 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                 # obj.glmm.null$eMat[,ne] = GE_tilde
                 getildeMat <- cbind(getildeMat, GE_tilde)
 
-                Sigma_iGE  <- getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
+                Sigma_iGE  <- if (smw_cached) {
+                  applySigmaInvSMW_multiV(GE_tilde)
+                } else {
+                  getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
+                }
                 ## var1GE: same projection-residual form as var1, with GE_tilde / Sigma_iGE.
                 GEtSig_iGE <- as.numeric(crossprod(GE_tilde, Sigma_iGE))
                 GEtSig_iX  <- as.vector(crossprod(GE_tilde, Sigma_iX))   # length p (reused below for I_21)
@@ -2020,7 +2044,11 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                 var2_a <- t(G0_sample_tilde) %*% Sigma_iG
               } else {
                 G0_sample_tilde_I <- as.vector(I_mat %*% G0_sample_tilde)
-                Sigma_iG <- getSigma_G_multiV(W, tauVecNew, G0_sample_tilde_I, maxiterPCG, tolPCG, LOCO = FALSE)
+                Sigma_iG <- if (smw_cached) {
+                  applySigmaInvSMW_multiV(G0_sample_tilde_I)
+                } else {
+                  getSigma_G_multiV(W, tauVecNew, G0_sample_tilde_I, maxiterPCG, tolPCG, LOCO = FALSE)
+                }
                 var2_a <- t(G0_sample_tilde_I) %*% Sigma_iG
               }
               var2sparseGRM <- var2_a[1, 1]

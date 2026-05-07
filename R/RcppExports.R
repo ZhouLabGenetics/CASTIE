@@ -237,6 +237,22 @@ getSigma_G_multiV <- function(wVec, tauVec, Gvec, maxiterPCG, tolPCG, LOCO) {
     .Call('_SAIGEQTL_getSigma_G_multiV', PACKAGE = 'SAIGEQTL', wVec, tauVec, Gvec, maxiterPCG, tolPCG, LOCO)
 }
 
+prepareSigmaInvSMW_multiV <- function(wVec, tauVec) {
+    .Call('_SAIGEQTL_prepareSigmaInvSMW_multiV', PACKAGE = 'SAIGEQTL', wVec, tauVec)
+}
+
+applySigmaInvSMW_multiV <- function(bVec) {
+    .Call('_SAIGEQTL_applySigmaInvSMW_multiV', PACKAGE = 'SAIGEQTL', bVec)
+}
+
+applySigmaInvSMW_multiV_mat <- function(Bmat) {
+    .Call('_SAIGEQTL_applySigmaInvSMW_multiV_mat', PACKAGE = 'SAIGEQTL', Bmat)
+}
+
+clearSigmaInvSMWcache <- function() {
+    invisible(.Call('_SAIGEQTL_clearSigmaInvSMWcache', PACKAGE = 'SAIGEQTL'))
+}
+
 fitglmmaiRPCG_multiV <- function(Yvec, Xmat, wVec, tauVec, fixtauVec, Sigma_iY, Sigma_iX, cov, nrun, maxiterPCG, tolPCG, tol, traceCVcutoff, LOCO) {
     .Call('_SAIGEQTL_fitglmmaiRPCG_multiV', PACKAGE = 'SAIGEQTL', Yvec, Xmat, wVec, tauVec, fixtauVec, Sigma_iY, Sigma_iX, cov, nrun, maxiterPCG, tolPCG, tol, traceCVcutoff, LOCO)
 }
