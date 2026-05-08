@@ -114,7 +114,9 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
                                VcellmatSampleFilelist = "",
                                useGRMtoFitNULL = TRUE,
                                isStoreSigma = FALSE,
-                               isShrinkModelOutput = FALSE) {
+                               isShrinkModelOutput = FALSE,
+                               smwCacheMemLimitMB = NULL,
+                               verbose = FALSE) {
   ## set up output files
   modelOut <- paste0(outputPrefix, ".rda")
 
@@ -211,6 +213,48 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     RhpcBLASctl::omp_set_num_threads(nThreads)
   }
   cat(nThreads, " thread(s) will be used\n")
+
+  ## Memory-checkpoint helper.  Called at each [TIMING] phase boundary.
+  ## Reports both R-side gc() (used / running peak) and OS-level RSS
+  ## (which captures C++/Armadillo allocations that R's gc doesn't see).
+  ## R peak is cumulative since session start; OS RSS is current at call time.
+  ## Column count of gc() varies (6 vs 7) by R version / memory-limit setting,
+  ## so use `ncol` for the trailing "max used (Mb)" column and `2` for "used (Mb)"
+  ## (always the second column).
+  .report_mem <- function(label) {
+    if (!verbose) return(invisible(NULL))
+    .gc <- gc(verbose = FALSE)
+    rss_mb <- tryCatch(
+      as.numeric(system2("ps", c("-o", "rss=", "-p", Sys.getpid()),
+                         stdout = TRUE, stderr = FALSE)) / 1024,
+      error = function(e) NA_real_
+    )
+    cat(sprintf("[MEM] %s: R-used=%.0f MB, R-peak=%.0f MB, OS-RSS=%.0f MB\n",
+                label, sum(.gc[, 2]), sum(.gc[, ncol(.gc)]),
+                if (length(rss_mb) == 0 || is.na(rss_mb)) NA_real_ else rss_mb))
+  }
+
+  ## Estimate the SMW cache size in MB and decide whether to populate it.
+  ## Cache is per-donor and dominated by 4 N x k floats (U_ind + A_inv_U_ind),
+  ## plus 2 N floats (w_ind + w_inv_tau0) and D x k^2 floats (middle_inv).
+  ## Returns list(estMB, allowed) where `allowed=FALSE` means caller should skip
+  ## prepareSigmaInvSMW_multiV and use the per-vector fallback.
+  .smw_cache_decision <- function(eMat, label) {
+    if (is.null(eMat)) return(list(estMB = 0, allowed = FALSE))
+    N <- nrow(eMat); k <- ncol(eMat)
+    n_donors <- if (exists("modglmm", inherits = FALSE) &&
+                    !is.null(modglmm$sampleID))
+                  length(unique(modglmm$sampleID)) else NA_real_
+    bytes <- 4 * (N * (2 + 2 * k) + (if (is.na(n_donors)) 0 else n_donors) * k^2)
+    estMB <- bytes / (1024 * 1024)
+    over  <- !is.null(smwCacheMemLimitMB) && estMB > smwCacheMemLimitMB
+    cat(sprintf("[SMW] %s: estimated cache size = %.0f MB (N=%d, k=%d%s)%s\n",
+                label, estMB, N, k,
+                if (is.na(n_donors)) "" else sprintf(", D=%d", as.integer(n_donors)),
+                if (over) sprintf(" -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
+                                  smwCacheMemLimitMB) else ""))
+    list(estMB = estMB, allowed = !over)
+  }
 
   if (FemaleOnly & MaleOnly) {
     stop("Both FemaleOnly and MaleOnly are TRUE. Please specify only one of them as TRUE to run the sex-specific job\n")
@@ -417,6 +461,7 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     } ## end plain text vs HDF5
 
     cat(sprintf("[TIMING] Phenotype file reading: %.1fs\n", (proc.time() - .t_pheno)[3]))
+    .report_mem("after Phenotype file reading")
 
     if (isRemoveZerosinPheno) {
       data <- data[which(data[, which(colnames(data) == phenoCol)] > 0), ]
@@ -932,6 +977,7 @@ if(is.null(eMat)){
   setmaxMissingRateforGRM(maxMissingRateforGRM)
 
   cat(sprintf("[TIMING] Data prep (merge, model matrix, eMat, GRM): %.1fs\n", (proc.time() - .t_dataprep)[3]))
+  .report_mem("after Data prep")
 
   .t_glm <- proc.time()
   if (traitType == "binary") {
@@ -1089,6 +1135,7 @@ if(is.null(eMat)){
   #set_store_sigma(isStoreSigma)
 
   cat(sprintf("[TIMING] Initial GLM fit: %.1fs\n", (proc.time() - .t_glm)[3]))
+  .report_mem("after Initial GLM fit")
 
   if (!skipModelFitting) {
     # setisUseSparseSigmaforNullModelFitting(useSparseGRMtoFitNULL)
@@ -1144,6 +1191,7 @@ if(is.null(eMat)){
 
       modglmm$obj.glm.null$model <- data.frame(modglmm$obj.glm.null$model)
       cat(sprintf("[TIMING] AIREML null model fitting: %.1fs\n", (proc.time() - t_begin)[3]))
+      .report_mem("after AIREML null model fitting")
     } else {
       system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV_NB(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
         fit0,
@@ -1267,7 +1315,7 @@ if(is.null(eMat)){
     tauVecNew <- modglmm$theta
     .t_pp_sigmaiX <- proc.time()
     Sigma_iX <- getSigma_X_multiV(W, tauVecNew, modglmm$X, maxiterPCG, tolPCG, LOCO = FALSE)
-    cat(sprintf("[TIMING:PP] getSigma_X_multiV: %.2fs\n", (proc.time() - .t_pp_sigmaiX)[3]))
+    if (verbose) cat(sprintf("[TIMING:PP] getSigma_X_multiV: %.2fs\n", (proc.time() - .t_pp_sigmaiX)[3]))
     if (!isShrinkModelOutput) {
       Sigma_iXXSigma_iX <- Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX))
       modglmm$Sigma_iXXSigma_iX <- Sigma_iXXSigma_iX
@@ -1296,7 +1344,10 @@ if(is.null(eMat)){
       ## if preconditions don't hold.
       pp_smw_cached <- FALSE
       if (!is.null(modglmm$eMat) && length(tauVecNew) >= 3 && tauVecNew[3] != 0) {
-        pp_smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+        .pp_dec <- .smw_cache_decision(modglmm$eMat, "post-processing")
+        if (.pp_dec$allowed) {
+          pp_smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+        }
       }
       if (pp_smw_cached) {
         modglmm$spSigma <- gettI_Sigma_I_multiV_cached()
@@ -1304,7 +1355,7 @@ if(is.null(eMat)){
       } else {
         modglmm$spSigma <- gettI_Sigma_I_multiV(W, tauVecNew, maxiterPCG, tolPCG, LOCO = FALSE)
       }
-      cat(sprintf("[TIMING:PP] gettI_Sigma_I_multiV: %.2fs (cached=%s)\n",
+      if (verbose) cat(sprintf("[TIMING:PP] gettI_Sigma_I_multiV: %.2fs (cached=%s)\n",
                   (proc.time() - .t_pp_spsigma)[3], pp_smw_cached))
       # }else{
       # 	gen_sp_Sigma_multiV(W, tauVecNew)
@@ -1454,7 +1505,7 @@ if(is.null(eMat)){
       modglmm$T_longl_vec <- dataMerge_sort$longlVar
       .t_pp_save <- proc.time()
       save(modglmm, file = modelOut)
-      cat(sprintf("[TIMING:PP] save modglmm: %.2fs\n", (proc.time() - .t_pp_save)[3]))
+      if (verbose) cat(sprintf("[TIMING:PP] save modglmm: %.2fs\n", (proc.time() - .t_pp_save)[3]))
     }
 
   if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 || (!modglmm$isCovariateOffset && any(modglmm$theta[2:length(modglmm$theta)] == 0))){
@@ -1487,7 +1538,7 @@ if(is.null(eMat)){
       .t_pp_setgeno <- proc.time()
       # setgeno(bedFile, bimFile, famFile, subSampleInGeno, indicatorGenoSamplesWithPheno, memoryChunk, isDiagofKinSetAsOne)
       setgeno(bedFile, bimFile, famFile, subSampleInGeno_unique, indicatorGenoSamplesWithPheno, memoryChunk, isDiagofKinSetAsOne)
-      cat(sprintf("[TIMING:PP] setgeno: %.2fs\n", (proc.time() - .t_pp_setgeno)[3]))
+      if (verbose) cat(sprintf("[TIMING:PP] setgeno: %.2fs\n", (proc.time() - .t_pp_setgeno)[3]))
     }
   } else {
     cat("Skip fitting the NULL GLMM\n")
@@ -1529,6 +1580,7 @@ if(is.null(eMat)){
   }
 
   cat(sprintf("[TIMING] Post-processing (Sigma_iX, spSigma, save): %.1fs\n", (proc.time() - .t_post)[3]))
+  .report_mem("after Post-processing")
 
   .t_varratio <- proc.time()
   if (!skipVarianceRatioEstimation) {
@@ -1561,7 +1613,9 @@ if(is.null(eMat)){
       nThreads = nThreads, cateVarRatioMinMACVecExclude = cateVarRatioMinMACVecExclude,
       cateVarRatioMaxMACVecInclude = cateVarRatioMaxMACVecInclude,
       minMAFforGRM = minMAFforGRM, isDiagofKinSetAsOne = isDiagofKinSetAsOne,
-      includeNonautoMarkersforVarRatio = includeNonautoMarkersforVarRatio, isStoreSigma = isStoreSigma, useGRMtoFitNULL = useGRMtoFitNULL
+      includeNonautoMarkersforVarRatio = includeNonautoMarkersforVarRatio, isStoreSigma = isStoreSigma, useGRMtoFitNULL = useGRMtoFitNULL,
+      smwCacheMemLimitMB = smwCacheMemLimitMB,
+      verbose = verbose
     )
   } else {
     use_sandwich = NULL
@@ -1593,6 +1647,7 @@ if(is.null(eMat)){
   save(modglmm, file = modelOut)
 
   cat(sprintf("[TIMING] Variance ratio estimation + final save: %.1fs\n", (proc.time() - .t_varratio)[3]))
+  .report_mem("after Variance ratio estimation")
   cat(sprintf("[TIMING] ===== Total fitNULLGLMM_multiV: %.1fs =====\n", (proc.time() - .t0_total)[3]))
 }
 
@@ -1626,7 +1681,9 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                                         isDiagofKinSetAsOne,
                                         includeNonautoMarkersforVarRatio,
                                         isStoreSigma = FALSE,
-                                        useGRMtoFitNULL = TRUE) {
+                                        useGRMtoFitNULL = TRUE,
+                                        smwCacheMemLimitMB = NULL,
+                                        verbose = FALSE) {
   obj.noK <- obj.glmm.null$obj.noK
   if (file.exists(testOut)) {
     file.remove(testOut)
@@ -1681,7 +1738,17 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   ## their own Case 2 / 3) if preconditions don't hold.
   smw_cached <- FALSE
   if (!is.null(obj.glmm.null$eMat) && length(tauVecNew) >= 3 && tauVecNew[3] != 0) {
-    smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+    .vr_N <- nrow(obj.glmm.null$eMat); .vr_k <- ncol(obj.glmm.null$eMat)
+    .vr_D <- length(unique(obj.glmm.null$sampleID))
+    .vr_estMB <- 4 * (.vr_N * (2 + 2 * .vr_k) + .vr_D * .vr_k^2) / (1024 * 1024)
+    .vr_over  <- !is.null(smwCacheMemLimitMB) && .vr_estMB > smwCacheMemLimitMB
+    cat(sprintf("[SMW] variance-ratio: estimated cache size = %.0f MB (N=%d, k=%d, D=%d)%s\n",
+                .vr_estMB, .vr_N, .vr_k, .vr_D,
+                if (.vr_over) sprintf(" -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
+                                      smwCacheMemLimitMB) else ""))
+    if (!.vr_over) {
+      smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
+    }
   }
   on.exit(if (smw_cached) clearSigmaInvSMWcache(), add = TRUE)
   cat(sprintf("SMW cache for variance-ratio Sigma^-1 calls: %s\n",
@@ -1852,6 +1919,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
       numTestedMarker <- 0
       ratioCV <- ratioCVcutoff + 0.1
 
+      ## Per-category timing accumulators (seconds). Printed at end of category.
+      tcat_loop   <- 0  # total wall time of the marker loop body
+      tcat_geno   <- 0  # Get_OneSNP_Geno reads
+      tcat_sig_G  <- 0  # Sigma^-1 G  (one call per accepted marker)
+      tcat_ctx    <- 0  # entire per-marker context for(ne) loop
+      tcat_sig_GE <- 0  # Sigma^-1 GE_tilde (one call per context per marker), summed
+      tcat_t0     <- Sys.time()
+
       while (ratioCV > ratioCVcutoff) {
         while (numTestedMarker < numMarkers0) {
           macdata_i <- listOfMarkersForVarRatio[[k]][indexInMarkerList]
@@ -1859,11 +1934,13 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
           genoInd <- (MACdata$geno_ind)[macdata_i]
           cat(i, "th marker in geno ", genoInd, "\n")
           cat("MAC: ", (MACdata$MACvector)[macdata_i], "\n")
+          .tg0 <- Sys.time()
           if (genoInd == 0) {
             G0 <- Get_OneSNP_Geno(i - 1)
           } else if (genoInd == 1) {
             G0 <- Get_OneSNP_Geno_forVarRatio(i - 1)
           }
+          tcat_geno <- tcat_geno + as.numeric(difftime(Sys.time(), .tg0, units = "secs"))
 
           # if(sum(duplicated(obj.glmm.null$sampleID)) > 0){
           if (sum(G0) / (2 * length(G0)) > 0.5) {
@@ -1916,11 +1993,13 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             set_useGRMtoFitNULL(useGRMtoFitNULL)
 
 
+            .tsg0 <- Sys.time()
             Sigma_iG <- if (smw_cached) {
               applySigmaInvSMW_multiV(G)
             } else {
               getSigma_G_multiV(W, tauVecNew, G, maxiterPCG, tolPCG, LOCO = FALSE)
             }
+            tcat_sig_G <- tcat_sig_G + as.numeric(difftime(Sys.time(), .tsg0, units = "secs"))
             Sigma_iX <- Sigma_iX_noLOCO
 
             ## var1 = G' Sigma^-1 G - G' Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 G
@@ -1939,93 +2018,100 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
 
             if (!is.null(obj.glmm.null$eMat)) {
-              var1GE_vec <- NULL
-              varSWGEcond_vec <- NULL
-              varModelGEcond_vec <- NULL
-              var2sparseGE_vec <- NULL
-              getildeMat <- NULL
-              getilde_sample0_Mat <- NULL
-	      n_donors <- ncol(I_mat)		
-	      S_cell = G * (obj.glmm.null$residuals * var_weights) 
-  	      S_donor <- as.numeric(t(I_mat) %*% S_cell)      # donor contributions to U_G
-              for (ne in 1:ncol(obj.glmm.null$eMat)) {
-                evec <- obj.glmm.null$eMat[, ne]
+              ## Vectorized context loop: build all GE / GE_tilde / Sigma_iGE columns
+              ## once, then derive var1GE / I_21 / sandwich quantities via vector
+              ## and matrix ops.  Mathematically equivalent to the prior per-ne loop;
+              ## collapses nE small R-level matmuls and Sigma^-1 calls into one each.
+              getilde_sample0_Mat <- NULL  # preserved for count_nb branch compatibility
+              n_donors    <- ncol(I_mat)
+              ## Coerce to plain length-N vectors: obj.glmm.null$residuals can be
+              ## stored as an N x 1 matrix, which would broadcast incompatibly
+              ## against GE_tilde_mat (N x nE) when nE > 1.
+              residWeight <- as.numeric(obj.glmm.null$residuals) * as.numeric(var_weights)
+              S_cell      <- as.numeric(G) * residWeight
+              S_donor     <- as.numeric(t(I_mat) %*% S_cell)
+              .tctx0 <- Sys.time()
 
-                GE <- G0 * evec
-                GE_tilde <- GE - obj.noK$XXVX_inv %*% (obj.noK$XV %*% GE)
-                # GE_tilde_new = GE - I_mat %*% XXVXsample_inv0 %*%  (XVsample0_e %*% G0sample)
-                # print("sum(GE_tilde != GE_tilde_new)")
-                # print(sum((GE_tilde -  GE_tilde_new)^2))
+              eMat_loc <- obj.glmm.null$eMat
+              nE       <- ncol(eMat_loc)
 
-                # print(obj.noK$XXVX_inv[1:2,])
-                # XXVX_invtemp = I_mat %*% XXVXsample_inv0
-                # print(XXVX_invtemp[1:2,])
+              ## GE_mat: column ne is G0 * eMat[,ne].  R recycles G0 (length N) down columns.
+              GE_mat       <- eMat_loc * as.numeric(G0)
+              ## One projection matmul replaces nE scalar projections.
+              GE_tilde_mat <- GE_mat - obj.noK$XXVX_inv %*% (obj.noK$XV %*% GE_mat)
+              rm(GE_mat)   # consumed; release N x nE
+              getildeMat   <- GE_tilde_mat   # used outside the loop for var2nullGE
 
-                # obj.glmm.null$eMat[,ne] = GE_tilde
-                getildeMat <- cbind(getildeMat, GE_tilde)
-
-                Sigma_iGE  <- if (smw_cached) {
-                  applySigmaInvSMW_multiV(GE_tilde)
-                } else {
-                  getSigma_G_multiV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
-                }
-                ## var1GE: same projection-residual form as var1, with GE_tilde / Sigma_iGE.
-                GEtSig_iGE <- as.numeric(crossprod(GE_tilde, Sigma_iGE))
-                GEtSig_iX  <- as.vector(crossprod(GE_tilde, Sigma_iX))   # length p (reused below for I_21)
-                tX_Sig_iGE <- as.vector(crossprod(X, Sigma_iGE))         # length p
-                var1GE     <- as.numeric(GEtSig_iGE - GEtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iGE)
-		var1GE_vec <- c(var1GE_vec, var1GE)
-		S_GE <- innerProduct(GE_tilde, obj.glmm.null$residuals * var_weights)
-                p_exact_GE <- pchisq(S_GE^2 / var1GE, df = 1, lower.tail = F)
-                cat("S_GE ", S_GE, "  var1GE ", var1GE, "  p_exact_GE ", p_exact_GE, "\n")
-
-		# Donor-level contributions
-		I_11 <- var1
-		I_22 <- var1GE
-		## I_21 = GE_tilde' Sigma^-1 G - GE_tilde' Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 G
-		## Reuses GEtSig_iX (from var1GE) and tX_Sig_iG (from var1) above.
-		GEtSig_iG <- as.numeric(crossprod(GE_tilde, Sigma_iG))
-		I_21      <- as.numeric(GEtSig_iG - GEtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
-		varGEcondG_model <- I_22 - I_21^2 / I_11	
-  		c_coeff <- I_21 / I_11
-  		# Donor-level contributions
-		S_GE_cell = GE_tilde * (obj.glmm.null$residuals * var_weights)
-  		R_donor <- as.numeric(t(I_mat) %*% S_GE_cell)     
-  		Q_donor <- R_donor - c_coeff * S_donor
-  		T_cond_donor <- sum(Q_donor)
-  
-  		# Centered sandwich with HC1
-  		Q_donor_bar <- T_cond_donor / n_donors
-  		varGEcondG_SW <- sum((Q_donor - Q_donor_bar)^2) * n_donors / (n_donors - ncol(Sigma_iX))	
-                varSWGEcond_vec <- c(varSWGEcond_vec, varGEcondG_SW)
-		varModelGEcond_vec <- c(varModelGEcond_vec, varGEcondG_model)
-
-                # I_mat_e = I_mat * evec
-                # GE_sample = as.vector(t(G0) %*% I_mat_e)
-                # GE_sample_tilde = GE_sample  -  XXVXsample_inv0 %*%  (XVsample0 %*% GE_sample)
-                # getilde_sample0_Mat = cbind(getilde_sample0_Mat, GE_sample_tilde)
-                if (useSparseGRMforVarRatio) {
-                  set_isSparseGRM(useSparseGRMforVarRatio)
-                  Sigma_iGE_sparse <- getSigma_G_noV(W, tauVecNew, GE_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
-                  var2_a_GE <- t(GE_tilde) %*% Sigma_iGE_sparse
-                  var2sparseGRM_GE <- var2_a_GE[1, 1]
-                  var2sparseGE_vec <- c(var2sparseGE_vec, var2sparseGRM_GE)
-                } else {
-                  if (any(duplicated(obj.glmm.null$sampleID))) {
-                    if (useGRMtoFitNULL) {
-                      tauVal <- tauVecNew[3]
-                    } else {
-                      tauVal <- tauVecNew[2]
-                    }
-                    Sigma_iGE_sparse <- getSigma_G_V(W, tauVal, tauVecNew[1], GE_tilde, maxiterPCG, tolPCG)
-                    var2_a_GE <- t(GE_tilde) %*% Sigma_iGE_sparse
-                    var2sparseGRM_GE <- var2_a_GE[1, 1]
-                    var2sparseGE_vec <- c(var2sparseGE_vec, var2sparseGRM_GE)
-                  } else {
-                    var2sparseGE_vec <- c(var2sparseGE_vec, var1GE)
-                  }
+              ## One batched Sigma^-1 call when SMW cache is available; otherwise
+              ## fall back to per-column getSigma_G_multiV (no batched C++ API).
+              .tsge0 <- Sys.time()
+              if (smw_cached) {
+                Sigma_iGE_mat <- applySigmaInvSMW_multiV_mat(GE_tilde_mat)
+              } else {
+                Sigma_iGE_mat <- matrix(0, nrow = nrow(GE_tilde_mat), ncol = nE)
+                for (ne in seq_len(nE)) {
+                  Sigma_iGE_mat[, ne] <- getSigma_G_multiV(
+                    W, tauVecNew, GE_tilde_mat[, ne], maxiterPCG, tolPCG, LOCO = FALSE)
                 }
               }
+              tcat_sig_GE <- tcat_sig_GE + as.numeric(difftime(Sys.time(), .tsge0, units = "secs"))
+
+              ## Quadratic forms — all length-nE vectors / nE x p matrices.
+              GEtSig_iGE_vec <- colSums(GE_tilde_mat * Sigma_iGE_mat)              # nE
+              GEtSig_iX_mat  <- crossprod(GE_tilde_mat, Sigma_iX)                  # nE x p
+              tX_Sig_iGE_mat <- crossprod(X, Sigma_iGE_mat)                        # p x nE
+              rm(Sigma_iGE_mat)  # consumed; release N x nE
+              GEtSig_iX_Ainv <- GEtSig_iX_mat %*% XtSigma_iX_inv                   # nE x p
+              ## var1GE[ne] = GEtSig_iGE[ne] - GEtSig_iX[ne,] %*% A^-1 %*% tX_Sig_iGE[,ne]
+              var1GE_vec     <- as.numeric(GEtSig_iGE_vec -
+                                           rowSums(GEtSig_iX_Ainv * t(tX_Sig_iGE_mat)))
+
+              ## I_21[ne] = GEtSig_iG[ne] - GEtSig_iX[ne,] %*% A^-1 %*% tX_Sig_iG (constant)
+              GEtSig_iG_vec  <- as.vector(crossprod(GE_tilde_mat, Sigma_iG))       # nE
+              I_21_vec       <- as.numeric(GEtSig_iG_vec -
+                                           GEtSig_iX_Ainv %*% tX_Sig_iG)
+
+              I_11               <- var1
+              c_coeff_vec        <- I_21_vec / I_11
+              varModelGEcond_vec <- var1GE_vec - I_21_vec^2 / I_11
+
+              ## Donor sandwich (HC1) — column-broadcast residual weights, then per-donor
+              ## contributions, then centered sum-of-squares per context.
+              S_GE_cell_mat <- GE_tilde_mat * residWeight                          # N x nE
+              R_donor_mat   <- as.matrix(t(I_mat) %*% S_GE_cell_mat)               # D x nE
+              rm(S_GE_cell_mat)  # consumed; release N x nE
+              Q_donor_mat   <- R_donor_mat - outer(S_donor, c_coeff_vec)           # D x nE
+              T_cond_vec    <- colSums(Q_donor_mat)                                # nE
+              Q_bar_vec     <- T_cond_vec / n_donors
+              centered_mat  <- sweep(Q_donor_mat, 2, Q_bar_vec, `-`)
+              varSWGEcond_vec <- colSums(centered_mat^2) * n_donors /
+                                 (n_donors - ncol(Sigma_iX))
+              rm(centered_mat, Q_donor_mat, R_donor_mat)  # D x nE each
+
+              ## Sparse-GRM variance ratio (per-context: no batched C++ API).
+              if (useSparseGRMforVarRatio) {
+                set_isSparseGRM(useSparseGRMforVarRatio)
+                var2sparseGE_vec <- numeric(nE)
+                for (ne in seq_len(nE)) {
+                  GEt_ne           <- GE_tilde_mat[, ne]
+                  Sigma_iGE_sparse <- getSigma_G_noV(W, tauVecNew, GEt_ne,
+                                                    maxiterPCG, tolPCG, LOCO = FALSE)
+                  var2sparseGE_vec[ne] <- as.numeric(crossprod(GEt_ne, Sigma_iGE_sparse))
+                }
+              } else if (any(duplicated(obj.glmm.null$sampleID))) {
+                tauVal <- if (useGRMtoFitNULL) tauVecNew[3] else tauVecNew[2]
+                var2sparseGE_vec <- numeric(nE)
+                for (ne in seq_len(nE)) {
+                  GEt_ne           <- GE_tilde_mat[, ne]
+                  Sigma_iGE_sparse <- getSigma_G_V(W, tauVal, tauVecNew[1], GEt_ne,
+                                                  maxiterPCG, tolPCG)
+                  var2sparseGE_vec[ne] <- as.numeric(crossprod(GEt_ne, Sigma_iGE_sparse))
+                }
+              } else {
+                var2sparseGE_vec <- var1GE_vec
+              }
+
+              tcat_ctx <- tcat_ctx + as.numeric(difftime(Sys.time(), .tctx0, units = "secs"))
             }
 
 
@@ -2176,6 +2262,27 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
           print(indexInMarkerList - 1)
         }
       } # end of while(ratioCV > ratioCVcutoff)
+
+      if (verbose) {
+        tcat_loop <- as.numeric(difftime(Sys.time(), tcat_t0, units = "secs"))
+        .nE_eff   <- if (!is.null(obj.glmm.null$eMat)) ncol(obj.glmm.null$eMat) else 0L
+        cat(sprintf(
+          "[TIMING:VR] cat=%d markers=%d nE=%d  total=%.2fs  geno=%.2fs  sigma_G=%.2fs  ctx_loop=%.2fs  sigma_GE_sum=%.2fs  other=%.2fs\n",
+          k, n_acc, .nE_eff,
+          tcat_loop, tcat_geno, tcat_sig_G, tcat_ctx, tcat_sig_GE,
+          max(0, tcat_loop - tcat_geno - tcat_sig_G - tcat_ctx)
+        ))
+        if (n_acc > 0) {
+          cat(sprintf(
+            "[TIMING:VR] cat=%d per-marker:  geno=%.4fs  sigma_G=%.4fs  ctx_loop=%.4fs  sigma_GE_per_ctx=%.4fs\n",
+            k,
+            tcat_geno   / n_acc,
+            tcat_sig_G  / n_acc,
+            tcat_ctx    / n_acc,
+            if (.nE_eff > 0) tcat_sig_GE / (n_acc * .nE_eff) else 0
+          ))
+        }
+      }
 
       ## Trim preallocated accumulators to the n_acc actually-used rows before
       ## summarizing so mean()/colMeans() see only real values, not the zero-padded tail.

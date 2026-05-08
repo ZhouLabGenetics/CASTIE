@@ -134,6 +134,10 @@ option_list <- list(
    help="Optional. Whether to store the inv Sigma matrix. [default, 'TRUE']"),
   make_option("--isShrinkModelOutput", type="logical", default=TRUE,
    help="Optional. Whether to remove unnecessary objects for step2 from the model output. [default, 'TRUE']"),
+  make_option("--smwCacheMemLimitMB", type="numeric", default=NA,
+   help="Optional. If set, skip the SMW cache (and fall back to per-vector Sigma solves) when the estimated cache size exceeds this many MB. Use to bound peak memory on large datasets. [default, unset]"),
+  make_option("--verbose", type="logical", default=FALSE,
+   help="Optional. Emit detailed [TIMING:PP], [TIMING:VR], and [MEM] diagnostics. Off by default for production runs. [default, 'FALSE']"),
   make_option("--usePCG", type="logical", default=FALSE,
    help="Optional. Whether to force PCG (Case 3) solver for null model fitting. Automatically set to TRUE when variance components are out of bounds. [default, 'FALSE']"),
   make_option("--isWriteReport", type="logical", default=FALSE,
@@ -157,6 +161,9 @@ for (o in option_list) {
     opt[[o@dest]] <- if (!is.null(o@default)) o@default else FALSE
   }
 }
+
+## NA sentinel from optparse -> NULL so the fitNULLGLMM_multiV default kicks in.
+if (is.na(opt$smwCacheMemLimitMB)) opt$smwCacheMemLimitMB <- NULL
 
 ## Load SAIGEQTL with optional library path
 if(opt$library != ""){
@@ -428,6 +435,8 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
             sampleCovarCol=scovars,
             isStoreSigma=opt$isStoreSigma,
       isShrinkModelOutput=opt$isShrinkModelOutput,
+      smwCacheMemLimitMB=opt$smwCacheMemLimitMB,
+      verbose=opt$verbose,
       eCovarCol=ecovars
         )
 
@@ -510,6 +519,8 @@ if(!opt$isCovariateOffset){
               sampleCovarCol=scovars,
               isStoreSigma=opt$isStoreSigma,
               isShrinkModelOutput=opt$isShrinkModelOutput,
+              smwCacheMemLimitMB=opt$smwCacheMemLimitMB,
+              verbose=opt$verbose,
               eCovarCol=ecovars
           )
           TRUE
@@ -604,6 +615,8 @@ if(!opt$isCovariateOffset){
               sampleCovarCol=scovars,
               isStoreSigma=opt$isStoreSigma,
               isShrinkModelOutput=opt$isShrinkModelOutput,
+              smwCacheMemLimitMB=opt$smwCacheMemLimitMB,
+              verbose=opt$verbose,
               eCovarCol=ecovars
           )
           my_env = new.env()
@@ -739,6 +752,8 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
 	    sampleCovarCol=scovars,
 	    isStoreSigma=opt$isStoreSigma,
       isShrinkModelOutput=opt$isShrinkModelOutput,
+      smwCacheMemLimitMB=opt$smwCacheMemLimitMB,
+      verbose=opt$verbose,
       eCovarCol=ecovars
 	)
 
@@ -747,10 +762,17 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
     fit_success <<- FALSE  # Track failure
 })
 
+## Force full R gc + reset peak counter between stages — only when verbose
+## diagnostics are on.  Without [MEM] reporting these calls add no value
+## (R/Armadillo don't return memory to the OS regardless).
+if (isTRUE(opt$verbose)) gc(full = TRUE, reset = TRUE, verbose = FALSE)
+
 
 .fitStage <- function(suffix, isCovOff, usePCG, tauInitVal = tauInit) {
   if (usePCG) set_usePCG(TRUE)
   set.seed(1)
+  ## Reset R's peak counter so this stage's [MEM] readings are scoped to itself.
+  if (isTRUE(opt$verbose)) gc(full = TRUE, reset = TRUE, verbose = FALSE)
   result <- tryCatch(
     fitNULLGLMM_multiV(
       plinkFile=opt$plinkFile, bedFile=opt$bedFile,
@@ -797,7 +819,8 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
       longlCol=opt$longlCol, useGRMtoFitNULL=opt$useGRMtoFitNULL,
       offsetCol=opt$offsetCol, varWeightsCol=opt$varWeightsCol,
       sampleCovarCol=scovars, isStoreSigma=opt$isStoreSigma,
-      isShrinkModelOutput=opt$isShrinkModelOutput, eCovarCol=ecovars
+      isShrinkModelOutput=opt$isShrinkModelOutput, eCovarCol=ecovars,
+      smwCacheMemLimitMB=opt$smwCacheMemLimitMB, verbose=opt$verbose
     ),
     error = function(e) { cat("Fit failed:", e$message, "\n"); NULL }
   )
