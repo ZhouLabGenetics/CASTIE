@@ -152,7 +152,9 @@ mean, p-value based on traditional score test is returned. Default value is 2.")
   make_option("--permute_ginge_fam_file", type="character", default="",
     help="Path to permuted FAM file. If provided with --is_permute_ginge=TRUE, uses the permutation order from this FAM file instead of random permutation"),
   make_option("--library", type="character", default="",
-    help="Optional. Path to the library directory where SAIGEQTL is installed")
+    help="Optional. Path to the library directory where SAIGEQTL is installed"),
+  make_option("--output_format", type="character", default="parquet",
+    help="Output format for association results: 'parquet' or 'txt' [default=parquet]")
 )
 
 
@@ -409,6 +411,25 @@ SPAGMMATtest(vcfFile=opt$vcfFile,
              is_fastTest = opt$is_fastTest
 )
 
+}
+
+if (opt$output_format == "parquet") {
+  suppressPackageStartupMessages(library(arrow))
+  out_dir  <- dirname(opt$SAIGEOutputFile)
+  out_base <- basename(opt$SAIGEOutputFile)
+  if (out_dir == ".") out_dir <- getwd()
+  all_files  <- list.files(out_dir, full.names = TRUE)
+  candidates <- all_files[startsWith(basename(all_files), out_base)]
+  candidates <- candidates[!grepl("\\.(index|bin|parquet)$", candidates)]
+  for (f in candidates) {
+    dt <- data.table::fread(f)
+    out_pq <- paste0(sub("\\.txt$", "", f), ".parquet")
+    arrow::write_parquet(dt, out_pq)
+    file.remove(f)
+    cat("Converted", basename(f), "->", basename(out_pq), "\n")
+  }
+  idx <- paste0(opt$SAIGEOutputFile, ".index")
+  if (file.exists(idx)) file.remove(idx)
 }
 
 if(BLASctl_installed){
