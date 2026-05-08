@@ -19,3 +19,4 @@ plink-ng/
 pixi.lock
 .DS_Store
 CLAUDE.md
+.claude/
