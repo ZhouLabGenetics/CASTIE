@@ -7,6 +7,7 @@ ENV LANG=C.UTF-8
 ENV OMP_NUM_THREADS=1
 # Force step_2 to use 1 single thread. More threads are ineffective
 ENV PIXI_NO_PATH_UPDATE=1
+ENV PATH=/app/.pixi/envs/default/bin:$PATH
 
 RUN apt-get update -qq && \
     apt-get -y install curl time \
@@ -29,8 +30,8 @@ RUN pixi run Rscript -e 'if(!require(remotes)) install.packages("remotes", repos
 
 RUN CONDA_BUILD=1 pixi run R CMD INSTALL .
 
-RUN mv extdata/step1_fitNULLGLMM_qtl.R extdata/step2_tests_qtl.R extdata/step3_gene_pvalue_qtl.R extdata/makeGroupFile.R /usr/local/bin/ && \ 
-   chmod a+x /usr/local/bin/step1_fitNULLGLMM_qtl.R /usr/local/bin/step2_tests_qtl.R /usr/local/bin/step3_gene_pvalue_qtl.R /usr/local/bin/makeGroupFile.R && \
+RUN mv extdata/step1_fitNULLGLMM_qtl.R extdata/step2_tests_qtl.R extdata/step3_gene_pvalue_qtl.R extdata/step3_0.2.5.7.R extdata/makeGroupFile.R extdata/convert_phenoFile_to_h5.R /usr/local/bin/ && \
+   chmod a+x /usr/local/bin/step1_fitNULLGLMM_qtl.R /usr/local/bin/step2_tests_qtl.R /usr/local/bin/step3_gene_pvalue_qtl.R /usr/local/bin/step3_0.2.5.7.R /usr/local/bin/makeGroupFile.R /usr/local/bin/convert_phenoFile_to_h5.R && \
    pixi run Rscript /usr/local/bin/step1_fitNULLGLMM_qtl.R --help && \
    pixi run Rscript /usr/local/bin/step2_tests_qtl.R --help && \
    pixi run Rscript /usr/local/bin/step3_gene_pvalue_qtl.R --help && \
