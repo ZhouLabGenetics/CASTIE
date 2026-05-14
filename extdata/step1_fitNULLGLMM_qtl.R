@@ -453,7 +453,8 @@ fitNULLGLMM_multiV(plinkFile=opt$plinkFile,
   print(modglmm$theta)
 
 if(!opt$isCovariateOffset){
-  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || any(modglmm$theta[2:length(modglmm$theta)] == 0) || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
+  #if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || any(modglmm$theta[2:length(modglmm$theta)] == 0) || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
+  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
         cat("Theta out of bounds, trying PCG solver first...\n")
         pcg_success <- tryCatch({
           set_usePCG(TRUE)
@@ -836,7 +837,8 @@ if (isTRUE(opt$verbose)) gc(full = TRUE, reset = TRUE, verbose = FALSE)
   if (!ok) return(FALSE)
   m <- e$modglmm; print(m$theta)
   !is.null(m$theta) &&
-    !(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) && any(m$theta[2:length(m$theta)] == 0))
+    !(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) )
+    #!(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) && any(m$theta[2:length(m$theta)] == 0))
 }
 
 .promote <- function(suffix) {
@@ -1008,7 +1010,8 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
                sum(theta_vals[2:length(theta_vals)]) < 0 ||
                sum(theta_vals[2:length(theta_vals)]) > 10 ||
-               (!isTRUE(is_cov_offset_final) && any(theta_vals[2:length(theta_vals)] == 0))
+               (!isTRUE(is_cov_offset_final) )
+               #(!isTRUE(is_cov_offset_final) && any(theta_vals[2:length(theta_vals)] == 0))
 
   # require var ratio file for a usable result
   overall_ok <- file.exists(model_file) && converged && !theta_oob &&
