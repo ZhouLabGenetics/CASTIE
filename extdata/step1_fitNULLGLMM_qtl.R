@@ -837,8 +837,7 @@ if (isTRUE(opt$verbose)) gc(full = TRUE, reset = TRUE, verbose = FALSE)
   if (!ok) return(FALSE)
   m <- e$modglmm; print(m$theta)
   !is.null(m$theta) &&
-    !(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) )
-    #!(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10) && !((!m$isCovariateOffset) && any(m$theta[2:length(m$theta)] == 0))
+    !(sum(m$theta[2:length(m$theta)]) < 0 || sum(m$theta[2:length(m$theta)]) >10)
 }
 
 .promote <- function(suffix) {
@@ -1006,12 +1005,10 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
     emat_col_names <- m$eMatcolNames
   }
 
-  # also flag any individual tau == 0 for non-offset models (matches .thetaOK logic)
+  # flag theta out of bounds: sum < 0 or sum > 10 (tau == 0 is allowed)
   theta_oob <- is.null(theta_vals) || is.na(theta_vals[1]) ||
                sum(theta_vals[2:length(theta_vals)]) < 0 ||
-               sum(theta_vals[2:length(theta_vals)]) > 10 ||
-               (!isTRUE(is_cov_offset_final) )
-               #(!isTRUE(is_cov_offset_final) && any(theta_vals[2:length(theta_vals)] == 0))
+               sum(theta_vals[2:length(theta_vals)]) > 10
 
   # require var ratio file for a usable result
   overall_ok <- file.exists(model_file) && converged && !theta_oob &&

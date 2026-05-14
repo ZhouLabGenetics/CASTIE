@@ -1508,8 +1508,7 @@ if(is.null(eMat)){
       if (verbose) cat(sprintf("[TIMING:PP] save modglmm: %.2fs\n", (proc.time() - .t_pp_save)[3]))
     }
 
-  #if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 || (!modglmm$isCovariateOffset && any(modglmm$theta[2:length(modglmm$theta)] == 0))){
-  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10 || (!modglmm$isCovariateOffset )){
+  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
 
 	cat(modglmm$theta)
 	stop("Tau estimates out of bound: possible model divergence")
