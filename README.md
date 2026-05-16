@@ -31,3 +31,27 @@ step2_tests_qtl.R --is_permute_ginge=TRUE --permute_ginge_fam_file=path/to/permu
 ### Version 0.2.5.2
 
 - Updated to pixi installation
+
+### Version 0.2.5.7
+
+**Step 1 (`step1_fitNULLGLMM_qtl.R`) — new flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--smwCacheMemLimitMB` | numeric | NA | Skip the SMW cache and fall back to per-vector Sigma solves when estimated cache size exceeds this many MB. Useful to bound peak memory on large datasets |
+| `--isWriteReport` | logical | FALSE | Save a fitting report (solver used, convergence, offset flag) to a `report/` subdirectory next to `outputPrefix` |
+
+**Step 2 (`step2_tests_qtl.R`) — new flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--output_format` | character | parquet | Output format for association results: `parquet` or `txt` |
+
+**Usage examples:**
+```bash
+# Step 1 with memory-bounded SMW cache and fitting report
+step1_fitNULLGLMM_qtl.R --smwCacheMemLimitMB=8000 --isWriteReport=TRUE ...
+
+# Step 2 writing plain text output instead of parquet
+step2_tests_qtl.R --output_format=txt ...
+```
