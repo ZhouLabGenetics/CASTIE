@@ -413,6 +413,44 @@ SPAGMMATtest(vcfFile=opt$vcfFile,
 
 }
 
+## Detect "Argument is out of range for a double" errors by scanning output for
+## p.value == 0 with non-zero Tstat, which is the signature of this C++ SPA error.
+{
+  chk_dir  <- dirname(opt$SAIGEOutputFile)
+  chk_base <- basename(opt$SAIGEOutputFile)
+  if (chk_dir == ".") chk_dir <- getwd()
+  chk_all   <- list.files(chk_dir, full.names = TRUE)
+  chk_files <- chk_all[startsWith(basename(chk_all), chk_base)]
+  chk_files <- chk_files[!grepl("\\.(index|bin|parquet)$", chk_files)]
+
+  spa_error_detected <- FALSE
+  for (f in chk_files) {
+    dt_chk <- tryCatch(data.table::fread(f), error = function(e) NULL)
+    if (!is.null(dt_chk) && "p.value" %in% names(dt_chk) &&
+        "Tstat" %in% names(dt_chk) && nrow(dt_chk) > 0) {
+      if (any(dt_chk[["p.value"]] == 0 & !is.na(dt_chk[["Tstat"]]) &
+              dt_chk[["Tstat"]] != 0, na.rm = TRUE)) {
+        spa_error_detected <- TRUE
+        break
+      }
+    }
+  }
+
+  if (spa_error_detected) {
+    cat("WARNING: 'Argument is out of range for a double' errors detected",
+        "(p.value == 0 with non-zero Tstat). Removing all output files for this gene.\n")
+    idx_chk <- paste0(opt$SAIGEOutputFile, ".index")
+    for (f in c(chk_files, idx_chk)) {
+      if (file.exists(f)) {
+        file.remove(f)
+        cat("Removed:", basename(f), "\n")
+      }
+    }
+    if (BLASctl_installed) blas_set_num_threads(original_num_threads)
+    quit(status = 0)
+  }
+}
+
 if (opt$output_format == "parquet") {
   suppressPackageStartupMessages(library(arrow))
   out_dir  <- dirname(opt$SAIGEOutputFile)
