@@ -2260,6 +2260,7 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
         arma::vec t_varT_ctemp = t_G1tilde_P_G2tilde * (m_VarInvMat_cond.cols(m_startic, m_endic)) * (t_G1tilde_P_G2tilde.t());
 //std::cout << "here is_gtilde 5" << std::endl;
         t_varT_c = t_var1 - t_varT_ctemp(0);
+        double A_bread_c = t_varT_c;   // model-based information (bread); saved before optional sandwich overwrite of t_varT_c below
         //std::cout << "t_varT_c " << t_varT_c << " t_var1 " << t_var1 << " t_varT_ctemp(0) " << t_varT_ctemp(0) << std::endl;
 	//std::cout << "t_Tstat_c " << t_Tstat_c << " t_Tstat " << t_Tstat << " t_Tstat_ctemp(0) " << t_Tstat_ctemp(0) << std::endl;
 //std::cout << "here is_gtilde 6" << std::endl;
@@ -2303,7 +2304,7 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
 	double pval_noSPA_c; 
      //std::cout << "std::pow(std::numeric_limits<double>::min()) " << std::numeric_limits<double>::min() << std::endl;
      //std::cout << "t_varT_c " << t_varT_c << std::endl;
-     if (t_varT_c <= std::numeric_limits<double>::min() || t_varT_c <= std::pow(10, -5)){
+     if (t_varT_c <= std::numeric_limits<double>::min() || t_varT_c <= std::pow(10, -5) || A_bread_c <= std::pow(10, -5)){
      //if (t_varT_c <= 10^-10){
         t_pval_noSPA_c = 1;
         stat_c = 0;
@@ -2337,8 +2338,8 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
     std::string& t_pval_noSPA_str_c = buffAsStdStr_c;
 //std::cout << "here is_gtilde 7" << std::endl;
 
-    t_Beta_c = S_c/t_varT_c;
-    t_seBeta_c = fabs(t_Beta_c) / sqrt(stat_c);
+    t_Beta_c = S_c/A_bread_c;                 // Beta = U/A (bread), NOT U/sandwich; correct in both model-based and sandwich cases
+    t_seBeta_c = sqrt(t_varT_c)/A_bread_c;    // SE = sqrt(Var)/A: model-based -> 1/sqrt(A); sandwich -> sqrt(B)/A. z=Beta/SE unchanged
     t_Tstat_c = S_c;
   //}
   //double pval_noSPA_c;

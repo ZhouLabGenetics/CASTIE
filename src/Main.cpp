@@ -1021,7 +1021,7 @@ void mainMarkerInCPP(
 			//pval_c_ge_vec.at(k) = std::to_string(pval_c_ge);
 			pval_c_ge_vec.at(k) = pValueBuf;	
 			//Beta_c_ge_vec.at(k) = std::to_string(Beta_c_ge);
-			Beta_c_ge_vec.at(k) = std::to_string(Beta_c_ge);
+			Beta_c_ge_vec.at(k) = std::to_string(Beta_c_ge * (1 - 2*flip));  // flip sign when ALT is major (AF_Allele2>0.5), matching main-effect Beta at L727/735
 			//Beta_c_ge_vec.at(k) = std::to_string(Beta_ge);
 			//seBeta_c_ge_vec.at(k) = std::to_string(seBeta_c_ge);
 			seBeta_c_ge_vec.at(k) = std::to_string(seBeta_c_ge);
