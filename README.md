@@ -1,12 +1,6 @@
-SAIGE-QTL is an R package developed with Rcpp for scalable and accurate expression quantitative trait locus mapping for single-cell studies 
+CASTIE is an R package developed with Rcpp for scalable and accurate context-dependent eQTL mapping for single-cell studies 
 
-The method
-- Model repeat and complex data structure, due to multiple cells per individual and relatedness between individuals 
-- Model discrete read counts
-- Fast and scalable for large data, test 20k genes, 200 cell types, millions of cells, millions of variants
-- Test rare variations. Single-variant test is underpowered
-
-Please see [https://weizhou0.github.io/SAIGE-QTL-doc/](https://weizhou0.github.io/SAIGE-QTL-doc/) for how to run SAIGE-QTL.
+Please see [https://yijia0802.github.io/CASTIE_doc/](https://yijia0802.github.io/CASTIE_doc/) for how to run CASTIE.
 
 ## Version Updates
 
@@ -55,3 +49,6 @@ step1_fitNULLGLMM_qtl.R --smwCacheMemLimitMB=8000 --isWriteReport=TRUE ...
 # Step 2 writing plain text output instead of parquet
 step2_tests_qtl.R --output_format=txt ...
 ```
+### Version 0.2.5.8
+
+- fixed beta
