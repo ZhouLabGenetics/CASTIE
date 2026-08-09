@@ -152,7 +152,7 @@ mean, p-value based on traditional score test is returned. Default value is 2.")
   make_option("--permute_ginge_fam_file", type="character", default="",
     help="Path to permuted FAM file. If provided with --is_permute_ginge=TRUE, uses the permutation order from this FAM file instead of random permutation"),
   make_option("--library", type="character", default="",
-    help="Optional. Path to the library directory where SAIGEQTL is installed"),
+    help="Optional. Path to the library directory where CASTIE is installed"),
   make_option("--output_format", type="character", default="parquet",
     help="Output format for association results: 'parquet' or 'txt' [default=parquet]")
 )
@@ -170,17 +170,17 @@ for (o in option_list) {
   }
 }
 
-## Load SAIGEQTL with optional library path
+## Load CASTIE with optional library path
 if(opt$library != ""){
   suppressPackageStartupMessages({
-    library(SAIGEQTL, lib.loc=opt$library)
+    library(CASTIE, lib.loc=opt$library)
   })
-  cat("Loaded SAIGEQTL from library path:", opt$library, "\n")
+  cat("Loaded CASTIE from library path:", opt$library, "\n")
 } else {
   suppressPackageStartupMessages({
-    library(SAIGEQTL)
+    library(CASTIE)
   })
-  cat("Loaded SAIGEQTL from default library path\n")
+  cat("Loaded CASTIE from default library path\n")
 }
 
 BLASctl_installed <- require(RhpcBLASctl)
@@ -275,7 +275,7 @@ for(i in 1:length(weights.beta.list)){
 print("opt$r.corr")
 print(opt$r.corr)
 
-if(packageVersion("SAIGEQTL")>="0.2.2"){
+if(packageVersion("CASTIE")>="0.2.2"){
 SPAGMMATtest(vcfFile=opt$vcfFile,
              vcfFileIndex=opt$vcfFileIndex,
              vcfField=opt$vcfField,

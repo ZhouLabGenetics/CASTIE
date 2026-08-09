@@ -1,4 +1,4 @@
-Package: SAIGEQTL
+Package: CASTIE
 Type: Package
 Title: scalable and accurate expression quantitative trait locus mapping for single-cell studies
 Version: 0.2.5.8

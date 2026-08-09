@@ -146,7 +146,7 @@ option_list <- list(
   type="numeric", default=1,
       help="Optional. The proportion of subsamples used for estimate the inital values for variance covariance parameters"),
   make_option("--library", type="character", default="",
-      help="Optional. Path to the library directory where SAIGEQTL is installed")
+      help="Optional. Path to the library directory where CASTIE is installed")
 )
 
 
@@ -165,17 +165,17 @@ for (o in option_list) {
 ## NA sentinel from optparse -> NULL so the fitNULLGLMM_multiV default kicks in.
 if (is.na(opt$smwCacheMemLimitMB)) opt$smwCacheMemLimitMB <- NULL
 
-## Load SAIGEQTL with optional library path
+## Load CASTIE with optional library path
 if(opt$library != ""){
   suppressPackageStartupMessages({
-    library(SAIGEQTL, lib.loc=opt$library)
+    library(CASTIE, lib.loc=opt$library)
   })
-  cat("Loaded SAIGEQTL from library path:", opt$library, "\n")
+  cat("Loaded CASTIE from library path:", opt$library, "\n")
 } else {
   suppressPackageStartupMessages({
-    library(SAIGEQTL)
+    library(CASTIE)
   })
-  cat("Loaded SAIGEQTL from default library path\n")
+  cat("Loaded CASTIE from default library path\n")
 }
 
 print(sessionInfo())

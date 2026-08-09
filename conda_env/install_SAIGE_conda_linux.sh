@@ -50,7 +50,7 @@ R CMD INSTALL .
 
 # Test installation
 echo "Testing installation..."
-R -e "library(SAIGEQTL); cat('SAIGE-QTL Dynamic installed successfully\n')" || {
+R -e "library(CASTIE); cat('SAIGE-QTL Dynamic installed successfully\n')" || {
     echo "Installation test failed, but package may still work"
 }
 

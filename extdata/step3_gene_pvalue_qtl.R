@@ -2,7 +2,7 @@
 
 #options(stringsAsFactors=F, scipen = 999)
 options(stringsAsFactors=F)
-library(SAIGEQTL)
+library(CASTIE)
 BLASctl_installed <- require(RhpcBLASctl)
 library(optparse)
 library(data.table)
