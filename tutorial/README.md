@@ -50,3 +50,20 @@ Generated inputs:
 
 The complete commands are kept in `run_tutorial.sh` so they can be copied and
 adapted to real datasets.
+
+## Step 4: call eGenes across genes and contexts
+
+The small tutorial above analyzes one gene with the standard Step 3 script, so
+it stops after Step 3. For a multi-gene dynamic analysis, first create
+`step3_longformat.txt` with `step3_0.2.5.7.R`, then call eGenes directly:
+
+```bash
+step4_get_egenes.R \
+  --input output/step3_longformat.txt \
+  --outdir output/step4 \
+  --fdr 0.05
+```
+
+Step 4 expects the columns `Gene`, `pval_column`, and `ACAT_p`. It writes an
+eGene table and gene list for every p-value context, plus context-union,
+context-only, and shared-context summaries.

@@ -30,11 +30,12 @@ RUN pixi run Rscript -e 'if(!require(remotes)) install.packages("remotes", repos
 
 RUN CONDA_BUILD=1 pixi run R CMD INSTALL .
 
-RUN mv extdata/step1_fitNULLGLMM_qtl.R extdata/step2_tests_qtl.R extdata/step3_gene_pvalue_qtl.R extdata/step3_0.2.5.7.R extdata/makeGroupFile.R extdata/convert_phenoFile_to_h5.R /usr/local/bin/ && \
-   chmod a+x /usr/local/bin/step1_fitNULLGLMM_qtl.R /usr/local/bin/step2_tests_qtl.R /usr/local/bin/step3_gene_pvalue_qtl.R /usr/local/bin/step3_0.2.5.7.R /usr/local/bin/makeGroupFile.R /usr/local/bin/convert_phenoFile_to_h5.R && \
+RUN mv extdata/step1_fitNULLGLMM_qtl.R extdata/step2_tests_qtl.R extdata/step3_gene_pvalue_qtl.R extdata/step3_0.2.5.7.R extdata/step4_get_egenes.R extdata/makeGroupFile.R extdata/convert_phenoFile_to_h5.R /usr/local/bin/ && \
+   chmod a+x /usr/local/bin/step1_fitNULLGLMM_qtl.R /usr/local/bin/step2_tests_qtl.R /usr/local/bin/step3_gene_pvalue_qtl.R /usr/local/bin/step3_0.2.5.7.R /usr/local/bin/step4_get_egenes.R /usr/local/bin/makeGroupFile.R /usr/local/bin/convert_phenoFile_to_h5.R && \
    pixi run Rscript /usr/local/bin/step1_fitNULLGLMM_qtl.R --help && \
    pixi run Rscript /usr/local/bin/step2_tests_qtl.R --help && \
    pixi run Rscript /usr/local/bin/step3_gene_pvalue_qtl.R --help && \
+   pixi run Rscript /usr/local/bin/step4_get_egenes.R --help && \
    pixi run Rscript /usr/local/bin/makeGroupFile.R --help
 
 RUN rm -r src/
