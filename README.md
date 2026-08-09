@@ -4,27 +4,9 @@ Please see [https://yijia0802.github.io/CASTIE_doc/](https://yijia0802.github.io
 
 ## Version Updates
 
-### Version 0.2.5.1
+### Version 0.2.5.8
 
-**New Features:**
-- **Custom G×E Permutation Support**: Added `--permute_ginge_fam_file` parameter to Step2 for using custom genotype permutation orders from FAM files
-  - When used with `--is_permute_ginge=TRUE`, allows specifying a pre-generated permuted FAM file instead of random permutation
-  - Ensures consistent genotype permutation order between simulation and analysis workflows
-  - Maintains backward compatibility - without the parameter, original random permutation behavior is preserved
-
-**Usage:**
-```bash
-# Original random permutation (unchanged)
-step2_tests_qtl.R --is_permute_ginge=TRUE
-
-# New custom permutation using FAM file
-step2_tests_qtl.R --is_permute_ginge=TRUE --permute_ginge_fam_file=path/to/permuted.fam
-```
-## Version Updates
-
-### Version 0.2.5.2
-
-- Updated to pixi installation
+- fixed beta
 
 ### Version 0.2.5.7
 
@@ -49,6 +31,25 @@ step1_fitNULLGLMM_qtl.R --smwCacheMemLimitMB=8000 --isWriteReport=TRUE ...
 # Step 2 writing plain text output instead of parquet
 step2_tests_qtl.R --output_format=txt ...
 ```
-### Version 0.2.5.8
+### Version 0.2.5.2
 
-- fixed beta
+- Updated to pixi installation
+
+
+### Version 0.2.5.1
+
+**New Features:**
+- **Custom G×E Permutation Support**: Added `--permute_ginge_fam_file` parameter to Step2 for using custom genotype permutation orders from FAM files
+  - When used with `--is_permute_ginge=TRUE`, allows specifying a pre-generated permuted FAM file instead of random permutation
+  - Ensures consistent genotype permutation order between simulation and analysis workflows
+  - Maintains backward compatibility - without the parameter, original random permutation behavior is preserved
+
+**Usage:**
+```bash
+# Original random permutation (unchanged)
+step2_tests_qtl.R --is_permute_ginge=TRUE
+
+# New custom permutation using FAM file
+step2_tests_qtl.R --is_permute_ginge=TRUE --permute_ginge_fam_file=path/to/permuted.fam
+```
+
