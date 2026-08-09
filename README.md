@@ -2,6 +2,18 @@ CASTIE is an R package developed with Rcpp for scalable and accurate context-dep
 
 Please see [https://yijia0802.github.io/CASTIE_doc/](https://yijia0802.github.io/CASTIE_doc/) for how to run CASTIE.
 
+## Quick tutorial
+
+A self-contained Docker tutorial with deterministic simulated data is available
+in [`tutorial/`](tutorial/README.md):
+
+```bash
+bash tutorial/run_tutorial.sh
+```
+
+The tutorial generates a small cell-level count phenotype and PLINK genotype
+dataset, then runs CASTIE Steps 1–3. Results are written to `tutorial/output/`.
+
 ## Version Updates
 
 ### Version 0.2.5.8
@@ -52,4 +64,3 @@ step2_tests_qtl.R --is_permute_ginge=TRUE
 # New custom permutation using FAM file
 step2_tests_qtl.R --is_permute_ginge=TRUE --permute_ginge_fam_file=path/to/permuted.fam
 ```
-
