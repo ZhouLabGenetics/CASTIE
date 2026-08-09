@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 #
-# Convert a plain-text phenotype file (TSV/CSV) to HDF5 format for SAIGE-QTL.
+# Convert a plain-text phenotype file (TSV/CSV) to HDF5 format for CASTIE.
 #
 # The HDF5 file stores:
 #   /meta/<colname>    - one dataset per metadata column (IDs, covariates)

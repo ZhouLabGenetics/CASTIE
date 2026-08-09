@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
-cat("===== SAIGE-QTL Dynamic step1 wrapper start =====\n")
+cat("===== CASTIE Step 1 wrapper start =====\n")
 
 
 ## set list of cmd line arguments
@@ -1030,7 +1030,7 @@ write_step1_report <- function(outputPrefix, outputPrefix_varRatio,
   } else { "NA" }
 
   writeLines(c(
-    "=== SAIGE-QTL Dynamic Step 1 Fitting Report ===",
+    "=== CASTIE Step 1 Fitting Report ===",
     paste0("Date              : ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
     paste0("Output prefix     : ", outputPrefix),
     paste0("Phenotype         : ", opt$phenoCol),

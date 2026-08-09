@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
   library(methods)
 })
 
-cat("===== SAIGE-QTL Dynamic step2 wrapper start =====\n")
+cat("===== CASTIE Step 2 wrapper start =====\n")
 
 option_list <- list(
   make_option("--vcfFile", type="character",default="",
