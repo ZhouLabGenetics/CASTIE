@@ -1,6 +1,6 @@
 # CASTIE tutorial with simulated data
 
-This tutorial runs the three-stage CASTIE workflow on a small deterministic
+This tutorial runs the four-stage CASTIE workflow on a small deterministic
 dataset. It creates 40 simulated donors, five cells per donor, 200 variants,
 cell- and donor-level covariates, and one count phenotype (`gene_1`). The data
 are for software demonstration only and have no biological interpretation.
@@ -47,15 +47,25 @@ Generated inputs:
    variance ratio.
 2. Step 2 tests variants in the simulated cis region.
 3. Step 3 combines variant-level p-values into a gene-level p-value.
+4. Step 4 applies FDR control to call eGenes. The tutorial converts its
+   one-gene Step 3 result to the same long format used in a multi-gene run.
 
 The complete commands are kept in `run_tutorial.sh` so they can be copied and
 adapted to real datasets.
 
-## Step 4: call eGenes across genes and contexts
+## Step 4 output
 
-The small tutorial above analyzes one gene with the standard Step 3 script, so
-it stops after Step 3. For a multi-gene dynamic analysis, first create
-`step3_longformat.txt` with `step3_0.2.5.7.R`, then call eGenes directly:
+The tutorial runs Step 4 automatically. Its inputs and outputs are:
+
+- `output/step3_longformat.txt`: one-gene Step 3 result in the required schema
+- `output/step4/pval_main_egene.tsv`: significant main-effect eGenes
+- `output/step4/pval_main_egene_genes.txt`: significant gene names
+- `output/step4/all_contexts_egenes.txt`: union of context-dependent eGenes
+- `output/step4/context_only_egenes.txt`: context-dependent eGenes absent from
+  the main-effect list
+
+For a real multi-gene dynamic analysis, create `step3_longformat.txt` with
+`step3_0.2.5.7.R`, then use the same Step 4 command:
 
 ```bash
 step4_get_egenes.R \

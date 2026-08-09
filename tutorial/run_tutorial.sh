@@ -53,6 +53,23 @@ docker run --rm --platform linux/amd64 \
       --assocFile=output/gene_1_cis \
       --geneName=gene_1 \
       --genePval_outputFile=output/gene_1_gene_pvalue.tsv
+
+    # Step 4 accepts the combined long-format output used by multi-gene runs.
+    # Convert this one-gene tutorial result to the same schema.
+    Rscript -e '\''
+      library(data.table)
+      result <- fread("output/gene_1_gene_pvalue.tsv")
+      setnames(result, "gene", "Gene")
+      result[, pval_column := "pval_main"]
+      setcolorder(result, c("Gene", "pval_column", "ACAT_p",
+                            "top_MarkerID", "top_pval"))
+      fwrite(result, "output/step3_longformat.txt", sep = "\t")
+    '\''
+
+    step4_get_egenes.R \
+      --input=output/step3_longformat.txt \
+      --outdir=output/step4 \
+      --fdr=0.05
   '
 
 echo "Tutorial complete. Results are in ${TUTORIAL_DIR}/output"

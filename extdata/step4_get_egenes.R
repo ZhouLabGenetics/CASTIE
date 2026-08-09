@@ -53,7 +53,7 @@ for (col in levels(df$pval_column)) {
   valid <- is.finite(sub$ACAT_p) & sub$ACAT_p > 0 & sub$ACAT_p <= 1
   sub[, qv := NA_real_]
   if (any(valid)) {
-    sub[valid, qv := qvalue(ACAT_p, pi0 = 1)$qvalue]
+    sub[valid, qv := qvalue(ACAT_p, pi0 = 1, lfdr.out = FALSE)$qvalue]
   }
 
   message(col, " qvalue summary:")
@@ -82,7 +82,7 @@ context_cols <- setdiff(names(egene_list), exclude_cols)
 
 message("\nContext columns used for union: ", paste(context_cols, collapse = ", "))
 
-all_ctx_genes <- unique(unlist(egene_list[context_cols], use.names = FALSE))
+all_ctx_genes <- unique(as.character(unlist(egene_list[context_cols], use.names = FALSE)))
 ctx_only_genes <- setdiff(all_ctx_genes, main_genes)
 
 ctx_union_file <- file.path(opt$outdir, paste0(opt$prefix, "all_contexts_egenes.txt"))
@@ -110,7 +110,7 @@ if (length(ctx_egenes) >= 2) {
   }
 }
 
-gene_ctx_count <- sort(table(unlist(ctx_egenes, use.names = FALSE)), decreasing = TRUE)
+gene_ctx_count <- sort(table(as.character(unlist(ctx_egenes, use.names = FALSE))), decreasing = TRUE)
 multi_ctx <- gene_ctx_count[gene_ctx_count > 1]
 
 if (length(multi_ctx) > 0) {
