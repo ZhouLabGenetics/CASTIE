@@ -1,2 +1,5 @@
 thirdParty/cget
 ^\.github$
+^docker$
+^tutorial$
+^pixi\.toml$
