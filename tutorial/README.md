@@ -4,6 +4,8 @@ This tutorial runs the four-stage CASTIE workflow on a small deterministic
 dataset. It creates 40 simulated donors, five cells per donor, 200 variants,
 cell- and donor-level covariates, and one count phenotype (`gene_1`). The data
 are for software demonstration only and have no biological interpretation.
+The cell-level covariates `pf1` and `pf2` are configured as dynamic covariates,
+while `X1` and `X2` are donor-level covariates.
 
 ## Requirements
 

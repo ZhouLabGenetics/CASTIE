@@ -21,6 +21,7 @@ docker run --rm --platform linux/amd64 \
       --phenoCol=gene_1 \
       --covarColList=X1,X2,pf1,pf2 \
       --sampleCovarColList=X1,X2 \
+      --dynamicCovarColList=pf1,pf2 \
       --sampleIDColinphenoFile=IND_ID \
       --traitType=count \
       --outputPrefix=output/gene_1 \

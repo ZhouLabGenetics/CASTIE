@@ -2337,6 +2337,9 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   } # for(k in 1:length(listOfMarkersForVarRatio)){
   write.table(varRatioTable, varRatioOutFile, quote = F, col.names = F, row.names = F)
   
+  # Non-dynamic analyses do not have eMat and therefore do not use sandwich
+  # variances. Initialize the return value so that path is valid as well.
+  use_sandwich <- NULL
   if (!is.null(obj.glmm.null$eMat)) {
     #write.table(varModel_egcondg_mat, paste0(varRatioOutFile, ".varModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
     #write.table(varSW_egcondg_mat, paste0(varRatioOutFile, ".varSW_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
