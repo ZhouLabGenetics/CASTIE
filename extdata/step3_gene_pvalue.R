@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
 # ---------------- Command-line options ----------------
 option_list <- list(
   make_option("--input", type="character", default="",
-              help="Path to the main_results_filtered.txt file (input) [required]"),
+              help="Path to the combined, MAF-filtered Step 2 results [required]"),
   make_option("--outdir", type="character", default=".",
               help="Output directory [default='.']")
 )
@@ -113,4 +113,3 @@ setcolorder(combined, c("Gene", setdiff(names(combined), "Gene")))
 
 fwrite(combined, outfile, sep = "\t", quote = FALSE)
 cat("Done! Combined long-format file saved to:", outfile, "\n")
-

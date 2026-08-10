@@ -90,8 +90,7 @@ Generated inputs:
    variance ratio.
 2. Step 2 tests variants in the simulated cis region.
 3. Step 3 combines variant-level p-values into a gene-level p-value.
-4. Step 4 applies FDR control to call eGenes. The tutorial converts its
-   one-gene Step 3 result to the same long format used in a multi-gene run.
+4. Step 4 applies FDR control to call eGenes.
 
 The complete analysis commands are kept in `run_tutorial_in_container.sh` so
 they can be copied and adapted to real datasets.
@@ -100,7 +99,7 @@ they can be copied and adapted to real datasets.
 
 The tutorial runs Step 4 automatically. Its inputs and outputs are:
 
-- `output/step3_longformat.txt`: one-gene Step 3 result in the required schema
+- `output/step3/step3_longformat.txt`: Step 3 result in the required schema
 - `output/step4/pval_main_egene.tsv`: significant main-effect eGenes
 - `output/step4/pval_main_egene_genes.txt`: significant gene names
 - `output/step4/all_contexts_egenes.txt`: union of context-dependent eGenes
@@ -108,11 +107,15 @@ The tutorial runs Step 4 automatically. Its inputs and outputs are:
   the main-effect list
 
 For a real multi-gene dynamic analysis, create `step3_longformat.txt` with
-`step3_0.2.5.7.R`, then use the same Step 4 command:
+`step3_gene_pvalue.R`, then use the same Step 4 command:
 
 ```bash
+step3_gene_pvalue.R \
+  --input output/step3_input.txt \
+  --outdir output/step3
+
 step4_get_egenes.R \
-  --input output/step3_longformat.txt \
+  --input output/step3/step3_longformat.txt \
   --outdir output/step4 \
   --fdr 0.05
 ```
