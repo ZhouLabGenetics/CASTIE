@@ -85,31 +85,7 @@ res <- long[, {
   )
 }, by = .(Gene, pval_column)][order(Gene, pval_column)]
 
-# ---------------- Write per-gene files (with Gene column) ----------------
-res[, {
-  tmp <- copy(.SD)
-  tmp[, Gene := .BY$Gene]
-  fwrite(tmp, file.path(outdir, paste0(.BY$Gene, "_ACAT_results.txt")),
-         sep = "\t", quote = FALSE)
-  NULL
-}, by = Gene]
-
-# ---------------- Combine all per-gene files ----------------
-cat("Combining per-gene files into one long-format file...\n")
-
-gene_files <- list.files(outdir, pattern = "_ACAT_results\\.txt$", full.names = TRUE)
-
-read_with_gene <- function(fp) {
-  dt <- fread(fp)
-  if (!"Gene" %in% names(dt)) {
-    g <- sub("_ACAT_results\\.txt$", "", basename(fp))
-    dt[, Gene := g]
-  }
-  dt
-}
-
-combined <- rbindlist(lapply(gene_files, read_with_gene), use.names = TRUE, fill = TRUE)
-setcolorder(combined, c("Gene", setdiff(names(combined), "Gene")))
-
-fwrite(combined, outfile, sep = "\t", quote = FALSE)
-cat("Done! Combined long-format file saved to:", outfile, "\n")
+# Write the combined table once. Avoiding one file per gene is substantially
+# faster for genome-wide analyses and prevents filesystem metadata bottlenecks.
+fwrite(res, outfile, sep = "\t", quote = FALSE)
+cat("Done! Long-format file saved to:", outfile, "\n")

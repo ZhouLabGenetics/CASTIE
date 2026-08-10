@@ -89,7 +89,8 @@ Generated inputs:
 1. Step 1 fits the null generalized linear mixed model and estimates the
    variance ratio.
 2. Step 2 tests variants in the simulated cis region.
-3. Step 3 combines variant-level p-values into a gene-level p-value.
+3. The Polars command combines and filters Step 2 results; Step 3 then
+   combines variant-level p-values into gene-level p-values.
 4. Step 4 applies FDR control to call eGenes.
 
 The complete analysis commands are kept in `run_tutorial_in_container.sh` so
@@ -110,6 +111,15 @@ For a real multi-gene dynamic analysis, create `step3_longformat.txt` with
 `step3_gene_pvalue.R`, then use the same Step 4 command:
 
 ```bash
+concat_step2_results.py \
+  --input-dir /path/to/step2 \
+  --output output/step3_input.txt \
+  --contexts age,sex,pf1,pf2 \
+  --file-pattern '*.txt' \
+  --gene-regex '^(?P<gene>.+)_count_cis_window_1000000_0[.]2[.]5[.]7[.]txt$' \
+  --maf-min 0.05 \
+  --maf-max 0.95
+
 step3_gene_pvalue.R \
   --input output/step3_input.txt \
   --outdir output/step3
