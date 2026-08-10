@@ -28,7 +28,7 @@ RUN curl -L https://github.com/chrchang/plink-ng/archive/refs/tags/v2.0.0-a.6.16
 
 RUN pixi run Rscript -e 'if(!require(remotes)) install.packages("remotes", repos="https://cloud.r-project.org"); remotes::install_github(c("cysouw/qlcMatrix", "barkasn/fastSave"))'
 
-RUN CONDA_BUILD=1 pixi run R CMD INSTALL .
+RUN CONDA_BUILD=1 pixi run R CMD INSTALL --preclean .
 
 RUN mv extdata/step1_fitNULLGLMM_qtl.R extdata/step2_tests_qtl.R extdata/concat_step2_results.py extdata/step3_gene_pvalue.R extdata/step4_get_egenes.R extdata/makeGroupFile.R extdata/convert_phenoFile_to_h5.R /usr/local/bin/ && \
    chmod a+x /usr/local/bin/step1_fitNULLGLMM_qtl.R /usr/local/bin/step2_tests_qtl.R /usr/local/bin/concat_step2_results.py /usr/local/bin/step3_gene_pvalue.R /usr/local/bin/step4_get_egenes.R /usr/local/bin/makeGroupFile.R /usr/local/bin/convert_phenoFile_to_h5.R && \

@@ -1,0 +1,9 @@
+.git
+.pixi
+.Rproj.user
+*.Rproj
+.DS_Store
+src/*.o
+src/*.so
+src/*.dylib
+tutorial/output
