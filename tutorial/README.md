@@ -65,6 +65,9 @@ The launcher creates the Pixi environment, builds and installs the CASTIE R
 package, regenerates the simulated data, and runs Steps 1–4. Results are
 written to `tutorial/output/`.
 
+After installation, `pixi shell` adds the CASTIE Step scripts to `PATH`, so
+they can be called directly until you leave the shell with `exit`.
+
 If Pixi reports `expected a string, found table` while reading the platform
 configuration, run `pixi self-update` and retry.
 

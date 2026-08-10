@@ -7,6 +7,9 @@ platforms = [
 ]
 version = "0.3.2"
 
+[activation]
+scripts = ["scripts/activate.sh"]
+
 [tasks]
 install-github-deps = "Rscript -e 'if(!require(remotes)) install.packages(\"remotes\"); remotes::install_github(c(\"cysouw/qlcMatrix\", \"barkasn/fastSave\"))'"
 build = { cmd = "R CMD INSTALL .", depends-on = ["install-github-deps"] }

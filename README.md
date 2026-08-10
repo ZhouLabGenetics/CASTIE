@@ -49,6 +49,14 @@ Run CASTIE scripts from the source tree with `pixi run Rscript`, for example:
 pixi run Rscript extdata/step1_fitNULLGLMM_qtl.R --help
 ```
 
+Alternatively, activate the environment once. The CASTIE Step scripts are
+added to `PATH` automatically:
+
+```bash
+pixi shell
+step1_fitNULLGLMM_qtl.R --help
+```
+
 ## Quick tutorial
 
 A deterministic simulated-data tutorial runs Steps 1–4. With Docker:
