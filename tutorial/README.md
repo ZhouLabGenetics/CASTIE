@@ -30,6 +30,24 @@ To use another compatible image:
 CASTIE_IMAGE=your-account/castie:tag bash tutorial/run_tutorial.sh
 ```
 
+## Run from a Singularity or Apptainer image
+
+The image contains the tutorial under `/app/tutorial`. Only its output
+directory needs to be writable on the host:
+
+```bash
+mkdir -p castie_tutorial_output
+
+apptainer exec \
+  --bind "$PWD/castie_tutorial_output:/app/tutorial/output" \
+  CASTIE.sif \
+  bash /app/tutorial/run_tutorial_in_container.sh
+```
+
+Use `singularity exec` instead of `apptainer exec` on systems that provide the
+Singularity command. Results are written to `castie_tutorial_output/`; cloning
+the CASTIE repository is not required.
+
 ## Generate only the input data
 
 ```bash
@@ -52,8 +70,8 @@ Generated inputs:
 4. Step 4 applies FDR control to call eGenes. The tutorial converts its
    one-gene Step 3 result to the same long format used in a multi-gene run.
 
-The complete commands are kept in `run_tutorial.sh` so they can be copied and
-adapted to real datasets.
+The complete analysis commands are kept in `run_tutorial_in_container.sh` so
+they can be copied and adapted to real datasets.
 
 ## Step 4 output
 
