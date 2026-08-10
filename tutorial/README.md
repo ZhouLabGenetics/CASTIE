@@ -7,13 +7,15 @@ are for software demonstration only and have no biological interpretation.
 The cell-level covariates `pf1` and `pf2` are configured as dynamic covariates,
 while `X1` and `X2` are donor-level covariates.
 
-## Requirements
+## Option 1: Docker or Singularity/Apptainer (recommended)
+
+### Requirements
 
 - Python 3
 - Docker Desktop, or another Docker-compatible engine
 - The `yijia0802/castie:Latest` image available locally
 
-## Run the tutorial
+### Run with Docker
 
 From the repository root:
 
@@ -30,12 +32,13 @@ To use another compatible image:
 CASTIE_IMAGE=your-account/castie:tag bash tutorial/run_tutorial.sh
 ```
 
-## Run from a Singularity or Apptainer image
+### Run with Singularity or Apptainer
 
 The image contains the tutorial under `/app/tutorial`. Only its output
 directory needs to be writable on the host:
 
 ```bash
+apptainer pull CASTIE.sif docker://yijia0802/castie:Latest
 mkdir -p castie_tutorial_output
 
 apptainer exec \
@@ -47,6 +50,23 @@ apptainer exec \
 Use `singularity exec` instead of `apptainer exec` on systems that provide the
 Singularity command. Results are written to `castie_tutorial_output/`; cloning
 the CASTIE repository is not required.
+
+## Option 2: source installation with Pixi
+
+Install Pixi and clone CASTIE:
+
+```bash
+git clone https://github.com/ZhouLabGenetics/CASTIE.git
+cd CASTIE
+bash tutorial/run_tutorial_with_pixi.sh
+```
+
+The launcher creates the Pixi environment, builds and installs the CASTIE R
+package, regenerates the simulated data, and runs Steps 1–4. Results are
+written to `tutorial/output/`.
+
+If Pixi reports `expected a string, found table` while reading the platform
+configuration, run `pixi self-update` and retry.
 
 ## Generate only the input data
 

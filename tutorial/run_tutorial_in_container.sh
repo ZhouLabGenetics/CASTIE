@@ -4,6 +4,12 @@ set -euo pipefail
 TUTORIAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${TUTORIAL_DIR}"
 
+# A source installation sets CASTIE_SOURCE_ROOT so the scripts under extdata/
+# resolve exactly like the commands installed in the container image.
+if [[ -n "${CASTIE_SOURCE_ROOT:-}" ]]; then
+  export PATH="${CASTIE_SOURCE_ROOT}/extdata:${PATH}"
+fi
+
 mkdir -p output
 
 step1_fitNULLGLMM_qtl.R \

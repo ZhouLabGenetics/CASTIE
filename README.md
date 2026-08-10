@@ -1,18 +1,72 @@
-CASTIE is an R package developed with Rcpp for scalable and accurate context-dependent eQTL mapping for single-cell studies 
+CASTIE is an R package developed with Rcpp for scalable and accurate
+context-dependent eQTL mapping for single-cell studies.
 
 Please see [https://yijia0802.github.io/CASTIE_doc/](https://yijia0802.github.io/CASTIE_doc/) for how to run CASTIE.
 
+## Installation
+
+### 1. Docker or Singularity/Apptainer (recommended)
+
+Pull the Docker image:
+
+```bash
+docker pull yijia0802/castie:Latest
+```
+
+On an Apple Silicon Mac, run it with `--platform linux/amd64`. Intel/AMD Linux
+machines generally do not need that option.
+
+On an HPC system, create a Singularity/Apptainer image directly from Docker
+Hub:
+
+```bash
+apptainer pull CASTIE.sif docker://yijia0802/castie:Latest
+```
+
+Use `singularity pull` instead if your system provides Singularity rather than
+Apptainer. The image contains CASTIE, all dependencies, command-line scripts,
+and the simulated tutorial.
+
+### 2. Install from source with Pixi
+
+Install [Pixi](https://pixi.sh/), then clone and build CASTIE:
+
+```bash
+git clone https://github.com/ZhouLabGenetics/CASTIE.git
+cd CASTIE
+pixi install
+pixi run build
+pixi run test
+```
+
+Use a current Pixi release. If an older installation reports `expected a
+string, found table` while reading `platforms`, update it with `pixi
+self-update` and retry.
+
+Run CASTIE scripts from the source tree with `pixi run Rscript`, for example:
+
+```bash
+pixi run Rscript extdata/step1_fitNULLGLMM_qtl.R --help
+```
+
 ## Quick tutorial
 
-A self-contained Docker tutorial with deterministic simulated data is available
-in [`tutorial/`](tutorial/README.md):
+A deterministic simulated-data tutorial runs Steps 1–4. With Docker:
 
 ```bash
 bash tutorial/run_tutorial.sh
 ```
 
+With a Pixi source installation:
+
+```bash
+bash tutorial/run_tutorial_with_pixi.sh
+```
+
 The tutorial generates a small cell-level count phenotype and PLINK genotype
-dataset, then runs CASTIE Steps 1–3. Results are written to `tutorial/output/`.
+dataset, then runs CASTIE Steps 1–4. Results are written to `tutorial/output/`.
+See [`tutorial/`](tutorial/README.md) for Docker and Singularity/Apptainer
+instructions that do not require cloning the repository.
 
 ## Version Updates
 
