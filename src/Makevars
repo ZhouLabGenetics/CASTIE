@@ -8,7 +8,12 @@ PKG_CPPFLAGS = \
 
 CXX_STD = CXX14
 
-PKG_LIBS = $(ZLIB_LIB) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) -L../thirdParty/cget/lib/ -L../thirdParty/cget/lib64/ -lsuperlu -lzstd -L../lib64 -llapack -fopenmp
+# Some conda-forge macOS R builds retain a stale -lheapt_w entry in FLIBS
+# after the Fortran runtime is upgraded. CASTIE has no Fortran sources, and
+# its BLAS/LAPACK libraries are linked dynamically, so that wrapper is not
+# needed. Keep the remaining R-provided Fortran runtime flags.
+CASTIE_FLIBS = $(filter-out -lheapt_w,$(FLIBS))
+PKG_LIBS = $(ZLIB_LIB) $(LAPACK_LIBS) $(BLAS_LIBS) $(CASTIE_FLIBS) -L../thirdParty/cget/lib/ -L../thirdParty/cget/lib64/ -lsuperlu -lzstd -L../lib64 -llapack -fopenmp
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")
 
 
