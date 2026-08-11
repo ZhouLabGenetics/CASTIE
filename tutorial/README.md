@@ -130,6 +130,11 @@ step4_get_egenes.R \
   --fdr 0.05
 ```
 
+The concatenation command automatically reads tab-delimited text and Parquet
+Step 2 outputs. Use `--file-pattern '*.txt'` for text or
+`--file-pattern '*.parquet'` for Parquet, and make the filename extension in
+`--gene-regex` match the selected files. `--input-format=auto` is the default.
+
 Step 4 expects the columns `Gene`, `pval_column`, and `ACAT_p`. It writes an
 eGene table and gene list for every p-value context, plus context-union,
 context-only, and shared-context summaries.

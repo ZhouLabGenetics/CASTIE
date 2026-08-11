@@ -22,6 +22,12 @@ def parse_args():
     )
     parser.add_argument("--file-pattern", default="*", help="Input glob [default: *]")
     parser.add_argument(
+        "--input-format",
+        choices=["auto", "txt", "parquet"],
+        default="auto",
+        help="Input format. 'auto' detects .parquet by extension and treats other files as tab-delimited text [default: auto].",
+    )
+    parser.add_argument(
         "--gene-regex",
         required=True,
         help="Regex applied to each filename; it must contain a named group '(?P<gene>...)'.",
@@ -54,14 +60,21 @@ def main():
         raise SystemExit(f"No files matched {args.input_dir / args.file_pattern}")
 
     frames = []
+    format_counts = {"txt": 0, "parquet": 0}
     for path in files:
         match = gene_regex.search(path.name)
         if match is None:
             print(f"[SKIP] filename does not match --gene-regex: {path.name}", file=sys.stderr)
             continue
         gene = match.group("gene")
-        frame = (
-            pl.scan_csv(
+        input_format = args.input_format
+        if input_format == "auto":
+            input_format = "parquet" if path.suffix.lower() in {".parquet", ".pq"} else "txt"
+
+        if input_format == "parquet":
+            source = pl.scan_parquet(path)
+        else:
+            source = pl.scan_csv(
                 path,
                 separator="\t",
                 null_values=["NA", "NaN", ""],
@@ -73,6 +86,9 @@ def main():
                     "pval_ge_CCT": pl.Float64,
                 },
             )
+
+        frame = (
+            source
             .select(["MarkerID", "AF_Allele2", "p.value", "pval_ge", "pval_ge_CCT"])
             .filter(
                 (pl.col("AF_Allele2") > args.maf_min)
@@ -99,6 +115,7 @@ def main():
             )
         )
         frames.append(frame)
+        format_counts[input_format] += 1
 
     if not frames:
         raise SystemExit("No filenames matched --gene-regex")
@@ -107,6 +124,7 @@ def main():
     combined = pl.concat(frames, how="vertical").collect(engine="streaming")
     combined.write_csv(args.output, separator="\t")
     print(f"Loaded files: {len(frames)}")
+    print(f"Input formats: txt={format_counts['txt']}, parquet={format_counts['parquet']}")
     print(f"Output rows: {combined.height}")
     print(f"Saved: {args.output}")
 
