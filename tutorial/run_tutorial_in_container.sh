@@ -43,6 +43,7 @@ step2_tests_qtl.R \
   --LOCO=FALSE \
   --GMMATmodelFile=output/gene_1.rda \
   --SPAcutoff=2 \
+  --pval_cutoff_for_gxe=1 \
   --varianceRatioFile=output/gene_1.varianceRatio.txt \
   --rangestoIncludeFile=data/gene_1_region.tsv \
   --markers_per_chunk=1000 \
