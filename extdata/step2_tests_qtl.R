@@ -145,12 +145,6 @@ mean, p-value based on traditional score test is returned. Default value is 2.")
     help="p-values of genetic variants with MAC <= max_MAC_for_ER will be calculated via efficient resampling. [default=4]"),
   make_option("--is_EmpSPA", type="logical", default=FALSE,
     help="Whether to use empirical SPA"),
-  make_option("--is_permute_e", type="logical", default=FALSE,
-    help="Whether to permute cell context"),
-  make_option("--is_permute_ginge", type="logical", default=FALSE,
-    help="Whether to permute g in gxe"),
-  make_option("--permute_ginge_fam_file", type="character", default="",
-    help="Path to permuted FAM file. If provided with --is_permute_ginge=TRUE, uses the permutation order from this FAM file instead of random permutation"),
   make_option("--library", type="character", default="",
     help="Optional. Path to the library directory where CASTIE is installed"),
   make_option("--output_format", type="character", default="parquet",
@@ -339,10 +333,7 @@ SPAGMMATtest(vcfFile=opt$vcfFile,
 	     pval_cutoff_for_gxe = opt$pval_cutoff_for_gxe,
              max_MAC_use_ER = opt$max_MAC_for_ER,
 	     is_EmpSPA = opt$is_EmpSPA,
-	     is_fastTest = opt$is_fastTest,
-	     is_permute_e = opt$is_permute_e,
-	     is_permute_ginge = opt$is_permute_ginge,
-	     permute_ginge_fam_file = opt$permute_ginge_fam_file
+	     is_fastTest = opt$is_fastTest
 )
 
 }else{
