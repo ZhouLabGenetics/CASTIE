@@ -108,21 +108,3 @@ step2_tests_qtl.R --output_format=txt ...
 ### Version 0.2.5.2
 
 - Updated to pixi installation
-
-
-### Version 0.2.5.1
-
-**New Features:**
-- **Custom G×E Permutation Support**: Added `--permute_ginge_fam_file` parameter to Step2 for using custom genotype permutation orders from FAM files
-  - When used with `--is_permute_ginge=TRUE`, allows specifying a pre-generated permuted FAM file instead of random permutation
-  - Ensures consistent genotype permutation order between simulation and analysis workflows
-  - Maintains backward compatibility - without the parameter, original random permutation behavior is preserved
-
-**Usage:**
-```bash
-# Original random permutation (unchanged)
-step2_tests_qtl.R --is_permute_ginge=TRUE
-
-# New custom permutation using FAM file
-step2_tests_qtl.R --is_permute_ginge=TRUE --permute_ginge_fam_file=path/to/permuted.fam
-```
