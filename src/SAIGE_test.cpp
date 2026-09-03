@@ -2162,7 +2162,23 @@ void SAIGEClass::assign_for_itrait(unsigned int t_itrait){
 	//std::cout << "m_p_gxe " << m_p_gxe << std::endl;
 	m_startip_gxe = m_itrait*m_p_gxe;
 	m_endip_gxe = m_startip_gxe + m_p_gxe - 1;
-	m_n_gxe = (m_XV_gxe_mt.n_cols) / (m_traitType_vec.size());
+	// m_n_gxe is the per-trait CELL count, used below to slice the rows of
+	// m_XXVX_inv_gxe_mt. It must not be derived from m_XV_gxe_mt.n_cols.
+	//
+	// The two matrices are stacked along DIFFERENT axes on the R side
+	// (SAIGE_Test_main.R, the isgxe_vec[1] branch):
+	//     XV_gxe       <- rbind(XV_gxe,       obj.model$obj.noK$XV)         // XV is p x n
+	//     XXVX_inv_gxe <- rbind(XXVX_inv_gxe, obj.model$obj.noK$XXVX_inv)   // XXVX_inv is n x p
+	// so after rbind over T traits:
+	//     m_XV_gxe_mt        is (p*T) x n   -> n_rows/T = p   (correct, used above)
+	//     m_XXVX_inv_gxe_mt  is (n*T) x p   -> n_rows/T = n
+	// m_XV_gxe_mt.n_cols is n already, so dividing it by T gave n/T.
+	//
+	// At T = 1 the old expression is correct, which is why single-trait runs are
+	// unaffected. At T > 1 it made the row window in getadjGFast_gxe span n/T
+	// rows, so m_XXVX_inv_gxe_mt.rows(...) * m_XVG_gxe returned a length-n/T
+	// vector that was then subtracted from the length-n t_GVec.
+	m_n_gxe = (m_XXVX_inv_gxe_mt.n_rows) / (m_traitType_vec.size());
 	m_startin_gxe = m_itrait*m_n_gxe;
 	m_endin_gxe = m_startin_gxe + m_n_gxe - 1;
 	}
