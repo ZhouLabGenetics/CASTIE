@@ -66,7 +66,7 @@ SPAGMMATtest(
   is_output_markerList_in_groupTest = FALSE,
   pval_cutoff_for_fastTest = 0.05,
   is_fastTest = FALSE,
-  pval_cutoff_for_gxe = 0.001,
+  pval_cutoff_for_gxe = 1,
   is_noadjCov = TRUE,
   is_sparseGRM = TRUE,
   max_MAC_use_ER = 4,
