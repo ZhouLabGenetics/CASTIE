@@ -1,3 +1,11 @@
+## Note
+This tool is currently under development. 
+
+10/11/2026
+
+
+We've noticed a potential inflation while beta G and beta C are very large, we are investigating the issue and will update the software as soon as possible. 
+
 CASTIE is an R package developed with Rcpp for scalable and accurate
 context-dependent eQTL mapping for single-cell studies.
 
