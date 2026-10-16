@@ -1,6 +1,10 @@
 ## Note
 This tool is currently under development. 
 
+10/15/2026
+
+The inflation bias has been fixed in version 0.2.5.9, under the exact same docker with tag Latest.
+
 10/11/2026
 
 
