@@ -99,6 +99,19 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// setGxEModelCondInCPP
+void setGxEModelCondInCPP(arma::mat& t_X_cell_gxe, arma::mat& t_W_gxe, bool t_enable, bool t_donor_engine);
+RcppExport SEXP _CASTIE_setGxEModelCondInCPP(SEXP t_X_cell_gxeSEXP, SEXP t_W_gxeSEXP, SEXP t_enableSEXP, SEXP t_donor_engineSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat& >::type t_X_cell_gxe(t_X_cell_gxeSEXP);
+    Rcpp::traits::input_parameter< arma::mat& >::type t_W_gxe(t_W_gxeSEXP);
+    Rcpp::traits::input_parameter< bool >::type t_enable(t_enableSEXP);
+    Rcpp::traits::input_parameter< bool >::type t_donor_engine(t_donor_engineSEXP);
+    setGxEModelCondInCPP(t_X_cell_gxe, t_W_gxe, t_enable, t_donor_engine);
+    return R_NilValue;
+END_RCPP
+}
 // setAssocTest_GlobalVarsInCPP_GbyE
 void setAssocTest_GlobalVarsInCPP_GbyE(arma::mat& t_emat, bool t_isgxe, arma::imat& t_isUseSandwichVarianceMat, double t_pval_cutoff_for_gxe, arma::mat& t_XV_gxe, arma::mat& t_XXVX_inv_gxe, arma::mat& t_y_gxe, arma::mat& t_res_gxe, arma::mat& t_mu2_gxe, arma::mat& t_mu_gxe, arma::mat& t_varWeights_gxe, bool t_is_permute_e, bool t_is_permute_ginge);
 RcppExport SEXP _CASTIE_setAssocTest_GlobalVarsInCPP_GbyE(SEXP t_ematSEXP, SEXP t_isgxeSEXP, SEXP t_isUseSandwichVarianceMatSEXP, SEXP t_pval_cutoff_for_gxeSEXP, SEXP t_XV_gxeSEXP, SEXP t_XXVX_inv_gxeSEXP, SEXP t_y_gxeSEXP, SEXP t_res_gxeSEXP, SEXP t_mu2_gxeSEXP, SEXP t_mu_gxeSEXP, SEXP t_varWeights_gxeSEXP, SEXP t_is_permute_eSEXP, SEXP t_is_permute_gingeSEXP) {
@@ -511,6 +524,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type t_isGbyE(t_isGbyESEXP);
     rcpp_result_gen = Rcpp::wrap(openOutfile_single(t_traitType, t_isImputation, isappend, t_isMoreOutput, t_isGbyE));
     return rcpp_result_gen;
+END_RCPP
+}
+
+// closeOutfile_single
+void closeOutfile_single();
+RcppExport SEXP _CASTIE_closeOutfile_single() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    closeOutfile_single();
+    return R_NilValue;
 END_RCPP
 }
 // set_flagSparseGRM_cur_SAIGE
@@ -2620,6 +2644,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_CASTIE_openOutfile_single_LDmat", (DL_FUNC) &_CASTIE_openOutfile_single_LDmat, 1},
     {"_CASTIE_closeOutfile_single_LDmat", (DL_FUNC) &_CASTIE_closeOutfile_single_LDmat, 0},
     {"_CASTIE_setAssocTest_GlobalVarsInCPP", (DL_FUNC) &_CASTIE_setAssocTest_GlobalVarsInCPP, 9},
+    {"_CASTIE_setGxEModelCondInCPP", (DL_FUNC) &_CASTIE_setGxEModelCondInCPP, 4},
     {"_CASTIE_setAssocTest_GlobalVarsInCPP_GbyE", (DL_FUNC) &_CASTIE_setAssocTest_GlobalVarsInCPP_GbyE, 13},
     {"_CASTIE_setMarker_GlobalVarsInCPP", (DL_FUNC) &_CASTIE_setMarker_GlobalVarsInCPP, 2},
     {"_CASTIE_set_usePCG", (DL_FUNC) &_CASTIE_set_usePCG, 1},
@@ -2647,6 +2672,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_CASTIE_removeOutfile_inGroup", (DL_FUNC) &_CASTIE_removeOutfile_inGroup, 0},
     {"_CASTIE_removeOutfile_inSingle", (DL_FUNC) &_CASTIE_removeOutfile_inSingle, 0},
     {"_CASTIE_openOutfile_single", (DL_FUNC) &_CASTIE_openOutfile_single, 5},
+    {"_CASTIE_closeOutfile_single", (DL_FUNC) &_CASTIE_closeOutfile_single, 0},
     {"_CASTIE_set_flagSparseGRM_cur_SAIGE", (DL_FUNC) &_CASTIE_set_flagSparseGRM_cur_SAIGE, 1},
     {"_CASTIE_set_flagSparseGRM_cur_SAIGE_org", (DL_FUNC) &_CASTIE_set_flagSparseGRM_cur_SAIGE_org, 0},
     {"_CASTIE_copy_singleInGroup", (DL_FUNC) &_CASTIE_copy_singleInGroup, 0},

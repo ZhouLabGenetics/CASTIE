@@ -67,6 +67,8 @@ SPAGMMATtest(
   pval_cutoff_for_fastTest = 0.05,
   is_fastTest = FALSE,
   pval_cutoff_for_gxe = 1,
+  gxe_conditioning = "model",
+  gxe_modelcond_engine = "donor",
   is_noadjCov = TRUE,
   is_sparseGRM = TRUE,
   max_MAC_use_ER = 4,
@@ -165,6 +167,10 @@ SPAGMMATtest(
 \item{is_equal_weight_in_groupTest}{logical. Whether equal weights are used in group Test. If TRUE, equal weights will be included in the group test. By default, FALSE}
 
 \item{is_output_markerList_in_groupTest}{logical. Whether to output the marker lists included in the set-based tests for each mask. By default, FALSE}
+
+\item{gxe_conditioning}{character. How the GxE score is conditioned on the marginal G score: "model" (default) computes Var(T_G), Cov(T_GE, T_G), and Var(T_GE) exactly from the null-model covariance; "varratio" uses the previous variance-ratio approximation. "model" requires a null model fit without a GRM and otherwise falls back to "varratio" with a warning.}
+
+\item{gxe_modelcond_engine}{character. Engine for exact model-based GxE conditioning: "donor" (default) uses cached donor-level sufficient statistics; "cell" retains the exact cell-level reference implementation for validation.}
 
 \item{minMAC}{numeric. Minimum minor allele count of markers to test. By default, 0.5. The higher threshold between minMAC and minMAF will be used}
 

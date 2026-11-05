@@ -2201,6 +2201,329 @@ void SAIGEClass::assign_for_itrait_binaryindices(unsigned int t_itrait){
 }
 
 
+// ---------------------------------------------------------------------------
+// Model-based conditioning of the GxE score on the marginal G score.
+//
+// The conditional GxE test is T_c = T_GE - Cov(T_GE,T_G)/Var(T_G) * T_G with
+// Var_c = Var(T_GE) - Cov(T_GE,T_G)^2/Var(T_G). With BLUP residuals the exact
+// moments are u' P v, P = Sigma^-1 - Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1.
+// The variance-ratio path approximates Cov(T_GE,T_G) by
+// sqrt(VR_eg*VR_g) * <ge~, g~>_W, which over-adjusts by ~sqrt(VR_eg/VR_g)
+// because G is donor-level (strongly shrunk by the donor random effects) while
+// GxE is mostly within-donor. Here the three moments are computed exactly.
+//
+// Without a GRM the null-model covariance is donor-block-diagonal,
+//   Sigma_d = tau0 W_d^-1 + tau1 11' + tau2 E_d E_d',
+// so Sigma^-1 v = Wt v - Wt Z H_d Z' Wt v  (Wt = W/tau0, Z = [1, E]),
+// H_d = T^1/2 (I + T^1/2 Z_d' Wt_d Z_d T^1/2)^-1 T^1/2, T = diag(tau1, tau2,...).
+// This matches getPCG1ofSigmaAndVector_multiV (Cases 1/2) used in step 1.
+// ---------------------------------------------------------------------------
+void SAIGEClass::set_gxe_modelcond(arma::mat & t_X_cell_gxe,
+                                   arma::mat & t_W_gxe,
+                                   bool t_enable,
+                                   bool t_donor_engine){
+	m_X_cell_gxe_mt = t_X_cell_gxe;
+	m_W_gxe_mt = t_W_gxe;
+	m_gxe_modelcond = t_enable;
+	m_gxe_donorcond = t_enable && t_donor_engine;
+	m_gxe_cache.clear();
+	m_gxe_cache.resize(m_traitType_vec.size());
+}
+
+
+void SAIGEClass::build_gxe_cache(const arma::mat & t_emat, unsigned int t_ne){
+	GxECondCache & C = m_gxe_cache.at(m_itrait);
+	arma::vec tauvec = m_tauvec_mt.col(m_itrait);
+	C.tau0 = tauvec(0);
+	C.tau1 = (tauvec.n_elem > 1) ? tauvec(1) : 0.0;
+	C.tau2 = (tauvec.n_elem > 2) ? tauvec(2) : 0.0;
+
+	unsigned int N = m_n_gxe;
+	unsigned int nk = (C.tau2 > 0) ? t_ne : 0;
+	C.q = 1 + nk;
+	C.Z.set_size(N, C.q);
+	C.Z.col(0).ones();
+	if(nk > 0){
+		C.Z.cols(1, nk) = t_emat.cols(m_itrait * t_ne, m_itrait * t_ne + t_ne - 1);
+	}
+	C.wt = m_W_gxe_mt.col(m_itrait) / C.tau0;
+
+	unsigned int D = g_I_longl_mat.n_cols;
+	arma::cube A(C.q, C.q, D, arma::fill::zeros);
+	for(unsigned int i = 0; i < N; i++){
+		arma::rowvec zi = C.Z.row(i);
+		A.slice(g_I_longl_vec(i)) += C.wt(i) * (zi.t() * zi);
+	}
+	arma::vec tsq(C.q);
+	tsq(0) = std::sqrt(C.tau1);
+	for(unsigned int j = 1; j < C.q; j++){
+		tsq(j) = std::sqrt(C.tau2);
+	}
+	arma::mat Tsq = arma::diagmat(tsq);
+	arma::mat Iq = arma::eye<arma::mat>(C.q, C.q);
+	C.H.set_size(C.q, C.q, D);
+	for(unsigned int d = 0; d < D; d++){
+		arma::mat B = Iq + Tsq * A.slice(d) * Tsq;
+		C.H.slice(d) = Tsq * arma::inv_sympd(arma::symmatu(B)) * Tsq;
+	}
+	C.valid = true;   // gxe_SigmaInv below needs Z, wt and H
+
+	const arma::subview<double> X =
+		m_X_cell_gxe_mt.rows(m_startin_gxe, m_endin_gxe);
+	arma::mat XSiX(X.n_cols, X.n_cols, arma::fill::zeros);
+	if(m_gxe_donorcond){
+		// The donor engine only needs X' Sigma^-1 X, not the N x p SiX
+		// matrix itself.  Avoid retaining another large cell-level object.
+		for(unsigned int j = 0; j < X.n_cols; j++){
+			const arma::vec SiX_col = gxe_SigmaInv(X.col(j));
+			XSiX.col(j) = X.t() * SiX_col;
+		}
+		C.SiX.reset();
+	}else{
+		C.SiX.set_size(N, X.n_cols);
+		for(unsigned int j = 0; j < X.n_cols; j++){
+			C.SiX.col(j) = gxe_SigmaInv(X.col(j));
+		}
+		XSiX = X.t() * C.SiX;
+	}
+	C.XSiX_inv = arma::inv_sympd(arma::symmatu(XSiX));
+
+	if(!m_gxe_donorcond){
+		return;
+	}
+
+	// Build the sufficient statistics used by the donor-aggregate engine.
+	// This setup is paid once per gene/trait and replaces all cell-length
+	// Sigma^-1 and nuisance-projection work inside the marker/context loop.
+	const unsigned int K = t_ne;
+	const unsigned int p = X.n_cols;
+	C.ne = K;
+	C.info_11_d.zeros(D);
+	C.info_1c_d.zeros(D, K);
+	C.info_cc_d.zeros(D, K);
+	C.proj_1_d.zeros(p, D);
+	C.proj_c_d.zeros(p, D, K);
+	C.score_1_d.zeros(D);
+	C.score_c_d.zeros(D, K);
+	C.adj_1_d.zeros(p, D);
+	C.adj_c_d.zeros(p, D, K);
+	C.residual_adj_d.zeros(p, D);
+
+	const arma::subview<double> XV =
+		m_XV_gxe_mt.rows(m_startip_gxe, m_endip_gxe);
+	const arma::subview<double> B =
+		m_XXVX_inv_gxe_mt.rows(m_startin_gxe, m_endin_gxe);
+	const arma::vec eff_res =
+		m_res_gxe_mt.col(m_itrait) % m_varWeights_gxe_mt.col(m_itrait) / C.tau0;
+
+	if(XV.n_cols != N || B.n_rows != N || eff_res.n_elem != N){
+		Rcpp::stop("Cannot build donor GxE cache: inconsistent cell-level dimensions");
+	}
+
+	const arma::vec one(N, arma::fill::ones);
+	const arma::vec Si1 = gxe_SigmaInv(one);
+	for(unsigned int i = 0; i < N; i++){
+		const unsigned int d = g_I_longl_vec(i);
+		C.info_11_d(d) += Si1(i);
+		C.proj_1_d.col(d) += X.row(i).t() * Si1(i);
+		C.score_1_d(d) += eff_res(i);
+		C.adj_1_d.col(d) += XV.col(i);
+		C.residual_adj_d.col(d) += B.row(i).t() * eff_res(i);
+	}
+
+	for(unsigned int k = 0; k < K; k++){
+		const arma::vec context =
+			t_emat.col(m_itrait * K + k);
+		const arma::vec SiC = gxe_SigmaInv(context);
+		for(unsigned int i = 0; i < N; i++){
+			const unsigned int d = g_I_longl_vec(i);
+			C.info_1c_d(d, k) += SiC(i);
+			C.info_cc_d(d, k) += context(i) * SiC(i);
+			C.proj_c_d.slice(k).col(d) += X.row(i).t() * SiC(i);
+			C.score_c_d(d, k) += eff_res(i) * context(i);
+			C.adj_c_d.slice(k).col(d) += XV.col(i) * context(i);
+		}
+	}
+	C.residual_adj_total = arma::sum(C.residual_adj_d, 1);
+	C.donor_valid = true;
+}
+
+
+arma::vec SAIGEClass::gxe_SigmaInv(const arma::vec & t_v){
+	const GxECondCache & C = m_gxe_cache.at(m_itrait);
+	unsigned int N = t_v.n_elem;
+	unsigned int D = C.H.n_slices;
+	arma::vec wv = C.wt % t_v;
+	arma::mat b(C.q, D, arma::fill::zeros);
+	for(unsigned int i = 0; i < N; i++){
+		unsigned int d = g_I_longl_vec(i);
+		for(unsigned int j = 0; j < C.q; j++){
+			b(j, d) += wv(i) * C.Z(i, j);
+		}
+	}
+	arma::mat c(C.q, D);
+	for(unsigned int d = 0; d < D; d++){
+		c.col(d) = C.H.slice(d) * b.col(d);
+	}
+	arma::vec x = wv;
+	for(unsigned int i = 0; i < N; i++){
+		unsigned int d = g_I_longl_vec(i);
+		double s = 0;
+		for(unsigned int j = 0; j < C.q; j++){
+			s += C.Z(i, j) * c(j, d);
+		}
+		x(i) -= C.wt(i) * s;
+	}
+	return x;
+}
+
+
+// Called once per marker (before the context loop) with the X-adjusted cell-level G.
+void SAIGEClass::prepare_gxe_condG(arma::vec & t_gtilde_G, const arma::mat & t_emat, unsigned int t_ne){
+	if(m_gxe_cache.size() <= m_itrait){
+		m_gxe_cache.resize(m_itrait + 1);
+	}
+	if(!m_gxe_cache.at(m_itrait).valid){
+		build_gxe_cache(t_emat, t_ne);
+	}
+	const GxECondCache & C = m_gxe_cache.at(m_itrait);
+	m_gxe_gtilde_G = t_gtilde_G;
+	m_gxe_SiG = gxe_SigmaInv(t_gtilde_G);
+	m_gxe_aG = C.SiX.t() * t_gtilde_G;
+	m_gxe_I11 = arma::dot(t_gtilde_G, m_gxe_SiG) - arma::as_scalar(m_gxe_aG.t() * C.XSiX_inv * m_gxe_aG);
+	m_gxe_TG = arma::dot(t_gtilde_G, m_res_gxe_mt.col(m_itrait) % m_varWeights_gxe_mt.col(m_itrait)) / C.tau0;
+}
+
+
+// Donor-aggregate equivalent of prepare_gxe_condG().  The raw genotype is
+// donor-level, so all exact information and score terms can be formed from
+// the sufficient statistics cached once in build_gxe_cache().
+void SAIGEClass::prepare_gxe_condG_donor(const arma::vec & t_donor_G,
+                                         const arma::mat & t_emat,
+                                         unsigned int t_ne){
+	if(m_gxe_cache.size() <= m_itrait){
+		m_gxe_cache.resize(m_itrait + 1);
+	}
+	if(!m_gxe_cache.at(m_itrait).valid){
+		build_gxe_cache(t_emat, t_ne);
+	}
+	const GxECondCache & C = m_gxe_cache.at(m_itrait);
+	if(!C.donor_valid){
+		Rcpp::stop("Donor GxE conditioning cache is unavailable");
+	}
+	if(t_donor_G.n_elem != C.info_11_d.n_elem){
+		Rcpp::stop("Donor genotype length does not match the GxE donor cache");
+	}
+
+	m_gxe_donor_G = t_donor_G;
+	m_gxe_aG = C.proj_1_d * t_donor_G;
+	m_gxe_alphaG = C.adj_1_d * t_donor_G;
+	const arma::vec g2 = arma::square(t_donor_G);
+	m_gxe_I11 = arma::dot(g2, C.info_11_d) -
+		arma::as_scalar(m_gxe_aG.t() * C.XSiX_inv * m_gxe_aG);
+
+	m_gxe_TG = arma::dot(t_donor_G, C.score_1_d) -
+		arma::dot(m_gxe_alphaG, C.residual_adj_total);
+}
+
+
+// Exact conditional GxE test using donor-level sufficient statistics.  This
+// is algebraically identical to the cell engine; only the accumulation order
+// changes.  No variance-ratio approximation is used here.
+void SAIGEClass::getMarkerPval_gxe_donor(
+	unsigned int t_context_index,
+	bool t_isswV,
+	double& t_Beta_c,
+	double& t_seBeta_c,
+	double& t_pval_c,
+	double& t_pval_noSPA_c,
+	double& t_Tstat_c,
+	double& t_varT_c,
+	arma::rowvec & t_G1tilde_P_G2tilde){
+
+	const GxECondCache & C = m_gxe_cache.at(m_itrait);
+	if(!C.donor_valid || t_context_index >= C.ne){
+		Rcpp::stop("Invalid donor GxE context cache");
+	}
+
+	const arma::vec g2 = arma::square(m_gxe_donor_G);
+	const arma::vec aGE = C.proj_c_d.slice(t_context_index) * m_gxe_donor_G;
+	const double I21 = arma::dot(g2, C.info_1c_d.col(t_context_index)) -
+		arma::as_scalar(aGE.t() * C.XSiX_inv * m_gxe_aG);
+	const double I22 = arma::dot(g2, C.info_cc_d.col(t_context_index)) -
+		arma::as_scalar(aGE.t() * C.XSiX_inv * aGE);
+
+	t_G1tilde_P_G2tilde.set_size(1);
+	t_G1tilde_P_G2tilde(0) = I21;
+
+	double coef_gxe_c = 0.0;
+	if(m_gxe_I11 > 0.0){
+		coef_gxe_c = I21 / m_gxe_I11;
+	}
+
+	const arma::vec alphaGE =
+		C.adj_c_d.slice(t_context_index) * m_gxe_donor_G;
+	const double TGE = arma::dot(
+		m_gxe_donor_G,
+		C.score_c_d.col(t_context_index)
+	) - arma::dot(alphaGE, C.residual_adj_total);
+
+	const double S_c = TGE - coef_gxe_c * m_gxe_TG;
+	const double A_bread_c = I22 - coef_gxe_c * I21;
+	double score_variance = A_bread_c;
+
+	if(t_isswV){
+		const arma::vec delta_alpha = alphaGE - coef_gxe_c * m_gxe_alphaG;
+		arma::vec Q_donor = m_gxe_donor_G %
+			(C.score_c_d.col(t_context_index) - coef_gxe_c * C.score_1_d);
+		Q_donor -= C.residual_adj_d.t() * delta_alpha;
+
+		const double Q_bar = arma::mean(Q_donor);
+		score_variance = arma::accu(arma::square(Q_donor - Q_bar));
+		const unsigned int n_donors = Q_donor.n_elem;
+		if(n_donors > (unsigned int)m_p_gxe){
+			score_variance *=
+				(double)n_donors / (double)(n_donors - m_p_gxe);
+		}
+	}
+
+	t_Tstat_c = S_c;
+	t_varT_c = score_variance;
+
+	if(!std::isfinite(A_bread_c) || !std::isfinite(score_variance) ||
+	   A_bread_c <= std::pow(10.0, -5.0) ||
+	   score_variance <= std::pow(10.0, -5.0)){
+		t_Beta_c = 0.0;
+		t_seBeta_c = 0.0;
+		t_pval_noSPA_c = 1.0;
+		t_pval_c = 1.0;
+		return;
+	}
+
+	const double stat_c = S_c * S_c / score_variance;
+	boost::math::chi_squared chisq_dist(1);
+	t_pval_noSPA_c = boost::math::cdf(complement(chisq_dist, stat_c));
+	t_pval_c = t_pval_noSPA_c;
+	t_Beta_c = S_c / A_bread_c;
+	t_seBeta_c = std::sqrt(score_variance) / A_bread_c;
+
+	// Match the existing post-processing used when the normal statistic is
+	// beyond SPAcutoff.  The p-value remains the normal/chi-square p-value.
+	if((m_traitType == "binary" || m_traitType == "count") &&
+	   t_pval_noSPA_c != 1.0 && stat_c > std::pow(m_SPA_Cutoff, 2.0)){
+		boost::math::normal ns;
+		try {
+			const double q = std::fabs(
+				boost::math::quantile(ns, t_pval_c / 2.0)
+			);
+			t_seBeta_c = std::fabs(t_Beta_c) / q;
+		} catch (const std::overflow_error&) {
+			t_seBeta_c = 0.0;
+		}
+	}
+}
+
+
 
 // revised
 // need to add sparse Sigma version
@@ -2261,11 +2584,25 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
 //std::cout << "t_pval " << t_pval << std::endl;
 
 
+	double coef_gxe_c = 0;   // Cov(T_GE,T_G)/Var(T_G), model-based path only
+	if(m_gxe_modelcond){
+		// exact moments under the null model (see build_gxe_cache)
+		const GxECondCache & C = m_gxe_cache.at(m_itrait);
+		arma::vec SiGE = gxe_SigmaInv(t_gtilde);
+		arma::vec aGE = C.SiX.t() * t_gtilde;
+		double I21 = arma::dot(t_gtilde, m_gxe_SiG) - arma::as_scalar(aGE.t() * C.XSiX_inv * m_gxe_aG);
+		double I22 = arma::dot(t_gtilde, SiGE) - arma::as_scalar(aGE.t() * C.XSiX_inv * aGE);
+		t_G1tilde_P_G2tilde.set_size(1);
+		t_G1tilde_P_G2tilde(0) = I21;
+		if(m_gxe_I11 > 0){
+			coef_gxe_c = I21 / m_gxe_I11;
+		}
+		t_Tstat_c = t_Tstat - coef_gxe_c * m_gxe_TG;
+		t_varT_c = I22 - coef_gxe_c * I21;
+	}else{
         t_G1tilde_P_G2tilde = sqrt(m_varRatioVal) * t_gtilde.t() * (m_P2Mat_cond.cols(m_startic, m_endic));
         arma::vec t_Tstat_ctemp =  t_G1tilde_P_G2tilde * (m_VarInvMat_cond.cols(m_startic, m_endic)) * (m_Tstat_cond.subvec(m_startic, m_endic));
 //std::cout << "here is_gtilde 2" << std::endl;
-        arma::mat tempgP2 = t_gtilde.t() * (m_P2Mat_cond.cols(m_startic, m_endic));
-//std::cout << "here is_gtilde 3" << std::endl;
 	//std::cout << "t_Tstat " << t_Tstat << std::endl;
 	//std::cout << "t_Tstat_ctemp(0) " << t_Tstat_ctemp(0) << std::endl;
 	//m_Tstat_cond.print("m_Tstat_cond");
@@ -2276,6 +2613,7 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
         arma::vec t_varT_ctemp = t_G1tilde_P_G2tilde * (m_VarInvMat_cond.cols(m_startic, m_endic)) * (t_G1tilde_P_G2tilde.t());
 //std::cout << "here is_gtilde 5" << std::endl;
         t_varT_c = t_var1 - t_varT_ctemp(0);
+	}
         double A_bread_c = t_varT_c;   // model-based information (bread); saved before optional sandwich overwrite of t_varT_c below
         //std::cout << "t_varT_c " << t_varT_c << " t_var1 " << t_var1 << " t_varT_ctemp(0) " << t_varT_ctemp(0) << std::endl;
 	//std::cout << "t_Tstat_c " << t_Tstat_c << " t_Tstat " << t_Tstat << " t_Tstat_ctemp(0) " << t_Tstat_ctemp(0) << std::endl;
@@ -2283,13 +2621,19 @@ void SAIGEClass::getMarkerPval_gxe(arma::vec & t_GVec,
 
 	// Sandwich variance: cluster by donor, take max with model-based variance
 	if(g_I_longl_mat.n_cols > 0 && t_isswV) {
-	    arma::vec c_coeff_vec = m_VarInvMat_cond.cols(m_startic, m_endic) *
-	                            m_Tstat_cond.subvec(m_startic, m_endic);
-	    arma::vec P2G_c = m_P2Mat_cond.cols(m_startic, m_endic) * c_coeff_vec;
 	    // use gxe cell-level residuals (m_res_gxe_mt) to match t_gtilde and P2G_c dimensions
 	    arma::vec eff_res = m_res_gxe_mt.col(m_itrait) % m_varWeights_gxe_mt.col(m_itrait)
 	                        / m_tauvec_mt(0, m_itrait);
-	    arma::vec score_cell = t_gtilde % (eff_res - std::sqrt(m_varRatioVal) * P2G_c);
+	    arma::vec score_cell;
+	    if(m_gxe_modelcond){
+	        // per-donor contribution of T_c = sum_i res_i (ge~_i - coef * g~_i), as in step 1
+	        score_cell = eff_res % (t_gtilde - coef_gxe_c * m_gxe_gtilde_G);
+	    }else{
+	        arma::vec c_coeff_vec = m_VarInvMat_cond.cols(m_startic, m_endic) *
+	                                m_Tstat_cond.subvec(m_startic, m_endic);
+	        arma::vec P2G_c = m_P2Mat_cond.cols(m_startic, m_endic) * c_coeff_vec;
+	        score_cell = t_gtilde % (eff_res - std::sqrt(m_varRatioVal) * P2G_c);
+	    }
 	    int n_donors = (int)g_I_longl_mat.n_cols;
 	    arma::vec Q_donor(n_donors, arma::fill::zeros);
 	    for(int i = 0; i < (int)score_cell.n_elem; i++){

@@ -33,6 +33,12 @@ SAIGE.Marker <- function(
 
   cat("traitType ", traitType, "\n")
   assign_g_outputFilePrefix0(OutputFile)
+  # Remove any streams left by an earlier marker test in this R session.
+  closeOutfile_single()
+  streams_open <- FALSE
+  on.exit({
+    if (streams_open) closeOutfile_single()
+  }, add = TRUE)
   for (itt in 1:length(traitType)) {
     if (length(traitType) > 1) {
       OutputFile_itt <- paste0(OutputFile, "_", phenotype_name_vec[itt])
@@ -44,6 +50,7 @@ SAIGE.Marker <- function(
     if (!isOpenOutFile_single) {
       stop("Output file ", OutputFile_itt, " can't be opened\n")
     }
+    streams_open <- TRUE
   }
 
 
@@ -210,6 +217,12 @@ SAIGE.Marker <- function(
       }
     }
   } # while(is_marker_test){
+
+  # fread() is called immediately after SAIGE.Marker returns.  Closing—not
+  # merely flushing—the C++ streams guarantees that every final row and field
+  # is visible and that Parquet conversion never observes a partial footer.
+  closeOutfile_single()
+  streams_open <- FALSE
 
   # information to users
 

@@ -58,6 +58,8 @@
 #' @param X_PARregion character. ranges of (pseudoautosomal) PAR region on chromosome X, which are seperated by comma and in the format start:end. By default: '60001-2699520,154931044-155260560' in the UCSC build hg19. For males, there are two X alleles in the PAR region, so PAR regions are treated the same as autosomes. In the NON-PAR regions (outside the specified PAR regions on chromosome X), for males, there is only one X allele. If is_rewrite_XnonPAR_forMales=TRUE, genotypes/dosages of all variants in the NON-PAR regions on chromosome X will be multiplied by 2 (Not activated).
 #' @param is_rewrite_XnonPAR_forMales logical. Whether to rewrite gentoypes or dosages of variants in the NON-PAR regions on chromosome X for males (multiply by 2). By default, FALSE. Note, only use is_rewrite_XnonPAR_forMales=TRUE when the specified VCF or Bgen file only has variants on chromosome X. When is_rewrite_XnonPAR_forMales=TRUE, the program does not check the chromosome value by assuming all variants are on chromosome X (Not activated)
 #' @param sampleFile_male character. Path to the file containing one column for IDs of MALE samples in the bgen or vcf file with NO header. Order does not matter
+#' @param gxe_conditioning character. How the GxE score is conditioned on the marginal G score: "model" (default) computes Var(T_G), Cov(T_GE, T_G) and Var(T_GE) exactly from the null-model covariance (closed form, requires a null model fit without a GRM); "varratio" uses the previous variance-ratio approximation. "model" falls back to "varratio" with a warning when it is not applicable.
+#' @param gxe_modelcond_engine character. Implementation used for exact model-based GxE conditioning: "donor" (default) uses donor-level sufficient statistics; "cell" retains the original cell-level calculation for validation.
 #' @return SAIGEOutputFile
 #' @export
 SPAGMMATtest <- function(bgenFile = "",
@@ -122,6 +124,8 @@ SPAGMMATtest <- function(bgenFile = "",
                          pval_cutoff_for_fastTest = 0.05,
                          is_fastTest = FALSE,
                          pval_cutoff_for_gxe = 1,
+                         gxe_conditioning = "model",
+                         gxe_modelcond_engine = "donor",
                          is_noadjCov = TRUE,
                          is_sparseGRM = TRUE,
                          max_MAC_use_ER = 4,
@@ -442,6 +446,8 @@ SPAGMMATtest <- function(bgenFile = "",
   mu_gxe <- NULL
 
   varWeights_gxe <- NULL
+  X_cell_gxe <- NULL  # cell-level design for model-based GxE conditioning, traits stacked by rows
+  W_gxe <- NULL       # null-model working weights for model-based GxE conditioning
 
   ## Set up the sample level summary statistics. This is specifically for data sets with repeated measurements
   if (sum(duplicated(obj.model.List[[1]]$sampleID)) > 0) {
@@ -545,6 +551,18 @@ SPAGMMATtest <- function(bgenFile = "",
         # S_a_gxe = cbind(S_a_gxe, colSums(S_a_gxe_sub))
         S_a_gxe <- matrix(1)
         varWeights_gxe <- cbind(varWeights_gxe, obj.model$varWeights)
+        if (gxe_conditioning == "model") {
+          ## X is dropped from repeated-measures model files; recover it exactly from XV = t(X * V)
+          X_cell_gxe <- rbind(X_cell_gxe, t(obj.model$obj.noK$XV) / as.vector(obj.model$obj.noK$V))
+          ## working weights used for Sigma in step 1 (mu.eta^2 / variance * var_weights)
+          vw <- as.vector(obj.model$varWeights)
+          W_gxe <- cbind(W_gxe, switch(obj.model$traitType,
+            count = as.vector(obj.model$mu) * vw,
+            binary = as.vector(obj.model$mu * (1 - obj.model$mu)) * vw,
+            quantitative = vw,
+            rep(NA_real_, length(obj.model$mu))
+          ))
+        }
       } else {
         XV_gxe <- matrix(1)
         XXVX_inv_gxe <- matrix(1)
@@ -917,6 +935,59 @@ SPAGMMATtest <- function(bgenFile = "",
   }
 
   setAssocTest_GlobalVarsInCPP_GbyE(eMat, isgxe_vec[1], isUseSandwichVarianceMat_gxe, as.numeric(pval_cutoff_for_gxe), XV_gxe, XXVX_inv_gxe, y_gxe, res_gxe, mu2_gxe, mu_gxe, varWeights_gxe,is_permute_e,is_permute_ginge)
+
+  ## Conditioning of the GxE score on the marginal G score
+  if (isgxe_vec[1]) {
+    if (!(gxe_conditioning %in% c("model", "varratio"))) {
+      stop("ERROR! gxe_conditioning must be 'model' or 'varratio'\n")
+    }
+    if (!(gxe_modelcond_engine %in% c("donor", "cell"))) {
+      stop("ERROR! gxe_modelcond_engine must be 'donor' or 'cell'\n")
+    }
+	if (gxe_modelcond_engine == "donor" && (isTRUE(is_permute_e) || isTRUE(is_permute_ginge))) {
+	  cat("NOTE: permutation mode uses the validation cell engine for exact GxE conditioning\n")
+	  gxe_modelcond_engine <- "cell"
+	}
+    gxe_modelcond <- FALSE
+    if (gxe_conditioning == "model") {
+      why_not <- NULL
+      if (sum(duplicated(obj.model.List[[1]]$sampleID)) == 0) {
+        why_not <- "no repeated measures per donor"
+      }
+      for (oml in seq_along(obj.model.List)) {
+        om <- obj.model.List[[oml]]
+        if (isTRUE(om$useGRMtoFitNULL)) {
+          why_not <- "the null model was fit with a GRM (useGRMtoFitNULL=TRUE)"
+        } else if (length(om$theta) > 3) {
+          why_not <- "the null model has more than three variance components"
+        } else if (!(om$traitType %in% c("count", "binary", "quantitative"))) {
+          why_not <- paste0("traitType '", om$traitType, "' is not supported")
+        } else if (is.null(om$useGRMtoFitNULL)) {
+          cat("NOTE: the model file does not record useGRMtoFitNULL (created by an older step 1); assuming the null model was fit without a GRM\n")
+        }
+      }
+      if (is.null(why_not) && (is.null(X_cell_gxe) || is.null(W_gxe) || anyNA(W_gxe) || nrow(X_cell_gxe) != nrow(XXVX_inv_gxe))) {
+        why_not <- "cell-level design/weights are unavailable"
+      }
+      if (is.null(why_not)) {
+        gxe_modelcond <- TRUE
+      } else {
+        cat("WARNING: model-based GxE conditioning is not available (", why_not, "); using variance-ratio conditioning\n")
+      }
+    }
+    cat("GxE conditioning on G:", ifelse(gxe_modelcond, "model-based (closed-form null-model covariance)", "variance-ratio approximation (legacy)"), "\n")
+    if (gxe_modelcond) {
+      cat("GxE model-conditioning engine:", gxe_modelcond_engine, "\n")
+      setGxEModelCondInCPP(
+        as.matrix(X_cell_gxe),
+        as.matrix(W_gxe),
+        TRUE,
+        gxe_modelcond_engine == "donor"
+      )
+    } else {
+      setGxEModelCondInCPP(matrix(0), matrix(0), FALSE, FALSE)
+    }
+  }
 
   # process condition
   if (isCondition) {
