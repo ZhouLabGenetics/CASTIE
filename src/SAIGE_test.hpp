@@ -126,6 +126,51 @@ arma::mat m_mu2_gxe_mt;
 arma::mat m_mu_gxe_mt;
 arma::mat m_varWeights_gxe_mt;
 
+// Model-based conditioning of the GxE score on the marginal G score.
+// Var(T_G), Cov(T_GE, T_G), Var(T_GE) are computed as u' P v with
+// P = Sigma^-1 - Sigma^-1 X (X' Sigma^-1 X)^-1 X' Sigma^-1 and the null-model
+// Sigma_d = tau0 W_d^-1 + tau1 11' + tau2 E_d E_d' (donor-block-diagonal, no GRM),
+// so Sigma^-1 v has a closed form (per-donor Woodbury) instead of the
+// sqrt(VR_eg * VR_g) variance-ratio approximation of the cross term.
+bool m_gxe_modelcond = false;
+bool m_gxe_donorcond = false;
+arma::mat m_X_cell_gxe_mt;   // cell-level fixed-effect design, traits stacked by rows (like m_XXVX_inv_gxe_mt)
+arma::mat m_W_gxe_mt;        // cell-level working weights of the null model, one column per trait
+struct GxECondCache {
+	bool valid = false;
+	double tau0 = 1, tau1 = 0, tau2 = 0;
+	unsigned int q = 1;      // 1 (intercept) + number of random-slope contexts
+	arma::mat Z;             // N x q: [1, E]
+	arma::vec wt;            // W / tau0
+	arma::cube H;            // q x q x n_donors: T^1/2 (I + T^1/2 Z_d' Wt_d Z_d T^1/2)^-1 T^1/2
+	arma::mat SiX;           // Sigma^-1 X  (N x p)
+	arma::mat XSiX_inv;      // (X' Sigma^-1 X)^-1  (p x p)
+
+	// Donor-level sufficient statistics for the exact-conditioning engine.
+	// Dimensions use D donors, K contexts and p nuisance covariates.
+	bool donor_valid = false;
+	unsigned int ne = 0;
+	arma::vec info_11_d;       // D: 1' Sigma_d^-1 1
+	arma::mat info_1c_d;       // D x K: 1' Sigma_d^-1 c_k
+	arma::mat info_cc_d;       // D x K: c_k' Sigma_d^-1 c_k
+	arma::mat proj_1_d;        // p x D: X_d' Sigma_d^-1 1
+	arma::cube proj_c_d;       // p x D x K: X_d' Sigma_d^-1 c_k
+	arma::vec score_1_d;       // D: sum residual score weights
+	arma::mat score_c_d;       // D x K: sum residual score weights * c_k
+	arma::mat adj_1_d;         // p x D: X'V contribution for donor-level 1
+	arma::cube adj_c_d;        // p x D x K: X'V contribution for c_k
+	arma::mat residual_adj_d;  // p x D: donor sum of residual * X(X'VX)^-1 rows
+	arma::vec residual_adj_total; // p: sum of residual_adj_d over donors
+};
+std::vector<GxECondCache> m_gxe_cache;
+arma::vec m_gxe_gtilde_G;    // X-adjusted cell-level G of the current marker
+arma::vec m_gxe_SiG;         // Sigma^-1 gtilde_G
+arma::vec m_gxe_aG;          // X' Sigma^-1 gtilde_G
+double m_gxe_I11 = 0;        // gtilde_G' P gtilde_G
+double m_gxe_TG = 0;         // marginal G score, cell level
+arma::vec m_gxe_donor_G;      // raw donor dosage for the current marker
+arma::vec m_gxe_alphaG;       // nuisance adjustment coefficient for donor G
+
 bool m_is_gxe;
 
 arma::mat    m_XVX_mt;
@@ -501,6 +546,21 @@ void scoreTestFast_gxe(arma::vec & t_GVec,
 
 void assignSingleVarianceRatio(bool issparseforVR, bool isnoXadj, bool issample);
 bool assignVarianceRatio(double MAC, bool issparseforVR, bool isnoXadj, bool issample);
+
+void set_gxe_modelcond(arma::mat & t_X_cell_gxe, arma::mat & t_W_gxe, bool t_enable, bool t_donor_engine);
+void build_gxe_cache(const arma::mat & t_emat, unsigned int t_ne);
+arma::vec gxe_SigmaInv(const arma::vec & t_v);
+void prepare_gxe_condG(arma::vec & t_gtilde_G, const arma::mat & t_emat, unsigned int t_ne);
+void prepare_gxe_condG_donor(const arma::vec & t_donor_G, const arma::mat & t_emat, unsigned int t_ne);
+void getMarkerPval_gxe_donor(unsigned int t_context_index,
+                             bool t_isswV,
+                             double& t_Beta_c,
+                             double& t_seBeta_c,
+                             double& t_pval_c,
+                             double& t_pval_noSPA_c,
+                             double& t_Tstat_c,
+                             double& t_varT_c,
+                             arma::rowvec & t_G1tilde_P_G2tilde);
 };
 }
 #endif

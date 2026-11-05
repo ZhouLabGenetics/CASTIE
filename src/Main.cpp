@@ -170,6 +170,19 @@ void setAssocTest_GlobalVarsInCPP(std::string t_impute_method,
 }
 
 
+// Enable model-based (closed-form Sigma) conditioning of the GxE score on the
+// marginal G score. t_X_cell_gxe: cell-level design, traits stacked by rows;
+// t_W_gxe: null-model working weights, one column per trait.
+// [[Rcpp::export]]
+void setGxEModelCondInCPP(arma::mat & t_X_cell_gxe,
+                          arma::mat & t_W_gxe,
+                          bool t_enable,
+                          bool t_donor_engine)
+{
+	ptr_gSAIGEobj->set_gxe_modelcond(t_X_cell_gxe, t_W_gxe, t_enable, t_donor_engine);
+}
+
+
 // [[Rcpp::export]]
 void setAssocTest_GlobalVarsInCPP_GbyE(
                                 arma::mat & t_emat,
@@ -794,19 +807,21 @@ void mainMarkerInCPP(
     arma::vec pval_c_ge_double_vec(ne);
     arma::vec evec;
     if(g_isgxe && pval < g_pval_cutoff_for_gxe){
+	ptr_gSAIGEobj->assign_for_itrait(i_mt);
+	const bool use_donor_gxe =
+		ptr_gSAIGEobj->m_gxe_modelcond && ptr_gSAIGEobj->m_gxe_donorcond;
 
   	//std::cout << "Here3 G x E" << std::endl;
     	unsigned int qg = 1;
     	unsigned int nrow_e = g_emat.n_rows;
-    	arma::mat P2Mat_g(nrow_e, qg);
+	arma::mat P2Mat_g;
     	arma::mat VarInvMat_g(qg, qg);
     	arma::mat VarMat_g(qg, qg);
     	arma::vec TstatVec_g(qg);
     	arma::vec pVec_g(qg);
     	arma::vec MAFVec_g(qg);
     	arma::vec w0G2_cond_Vec_g(qg);
-    	arma::vec gsumVec(nrow_e, arma::fill::zeros);
-    	arma::vec gyVec_g(qg);
+	arma::vec gyVec_g(qg);
     	gyVec_g(0) = gy;
     	double qsum_g = arma::accu(gyVec_g);
     	arma::vec qsumVec_g(qg);
@@ -817,9 +832,9 @@ void mainMarkerInCPP(
     	std::string pval_c_ge_str;
     	arma::vec t_GVec1;
 	//for SKAT test
-    	arma::mat P1Matge(ne, nrow_e);
-    	arma::mat P2Matge(nrow_e, ne);	
-    	arma::mat VarMatge(ne, ne);
+	arma::mat P1Matge;
+	arma::mat P2Matge;
+	arma::mat VarMatge(ne, ne);
 	//
 
     	arma::vec Score_c_ge_vec(ne);
@@ -831,6 +846,8 @@ void mainMarkerInCPP(
         //std::cout << "Tstat_g_diff " << Tstat_g_diff << std::endl;
 	//std::cout << "Tstat " << Tstat << std::endl;
 
+	if(!use_donor_gxe){
+	P2Mat_g.set_size(nrow_e, qg);
 	if((ptr_gSAIGEobj->g_I_longl_mat.n_cols != ptr_gSAIGEobj->g_I_longl_mat.n_rows) && (t_GVec.n_elem < ptr_gSAIGEobj->m_y_gxe_mt.n_rows)){
 		t_GVec1 = (ptr_gSAIGEobj->g_I_longl_mat) * t_GVec;
 		indexNonZeroVec_arma = arma::find(t_GVec1 > 0.0);
@@ -914,7 +931,7 @@ void mainMarkerInCPP(
 	VarInvMat_g = VarMat_g.i();
 	//std::cout << "HEREa2" << std::endl;
 
-  	ptr_gSAIGEobj->assignConditionFactors(
+	ptr_gSAIGEobj->assignConditionFactors(
                                         P2Mat_g,
                                         VarInvMat_g,
                                         VarMat_g,
@@ -924,7 +941,17 @@ void mainMarkerInCPP(
                                         qsumVec_g,
                                         gtildeVec,
                                         pVec_g);
-	ptr_gSAIGEobj->assign_for_itrait(i_mt);				
+	// assignConditionFactors() changes m_numMarker_cond from the value used by
+	// the earlier trait assignment (normally zero here) to the synthetic
+	// one-marker G conditioning set.  Refresh m_startic/m_endic before the
+	// legacy variance-ratio or cell-reference path indexes those matrices.
+	// The donor engine bypasses this block and does not use these indices.
+	ptr_gSAIGEobj->assign_for_itrait(i_mt);
+	if(ptr_gSAIGEobj->m_gxe_modelcond){
+		// exact Var(T_G), Sigma^-1 g~ and the cell-level T_G for model-based conditioning
+		ptr_gSAIGEobj->prepare_gxe_condG(gtildeVec, g_emat, ne);
+	}
+	}
 	//std::cout << "HEREa3" << std::endl;
 	double Beta_ge, seBeta_ge, pval_ge, Tstat_ge, varT_ge, pval_noSPA_ge, Beta_c_ge, seBeta_c_ge, pval_c_ge, Tstat_c_ge, varT_c_ge, pval_noSPA_c_ge, gy_ge, altFreq_ge;
 	arma::vec gtildeVec_ge, t_P2Vec_ge, t_GEVec;
@@ -933,7 +960,7 @@ void mainMarkerInCPP(
 	bool isSPAConverge_ge, is_gtilde_ge, is_region_ge, is_Firth_ge, is_FirthConverge_ge;
 	unsigned int ksub;
 
-	if(g_is_permute_ginge){
+	if(!use_donor_gxe && g_is_permute_ginge){
 		arma::vec t_GVec_permute = t_GVec.elem(g_permute_ginge_indices);
         	if((ptr_gSAIGEobj->g_I_longl_mat.n_cols != ptr_gSAIGEobj->g_I_longl_mat.n_rows) && (t_GVec.n_elem < ptr_gSAIGEobj->m_y_gxe_mt.n_rows)){
                 	t_GVec1 = (ptr_gSAIGEobj->g_I_longl_mat) * t_GVec_permute;
@@ -944,12 +971,33 @@ void mainMarkerInCPP(
 
                 	t_GVec1 = t_GVec_permute;
         	}
-	}	
+	}
+
+	if(use_donor_gxe){
+		arma::vec donor_G = t_GVec;
+		if(g_is_permute_ginge){
+			donor_G = t_GVec.elem(g_permute_ginge_indices);
+		}
+		ptr_gSAIGEobj->prepare_gxe_condG_donor(donor_G, g_emat, ne);
+	}
 
 
-        int isswV = 0;
-    	for(unsigned int k = 0; k < ne; k++){
+	for(unsigned int k = 0; k < ne; k++){
       	    ksub = i_mt * ne + k;
+	    bool iswege = (g_isswemat(i_mt, k) == 1);
+	    if(use_donor_gxe){
+		ptr_gSAIGEobj->getMarkerPval_gxe_donor(
+			k,
+			iswege,
+			Beta_c_ge,
+			seBeta_c_ge,
+			pval_c_ge,
+			pval_noSPA_c_ge,
+			Tstat_c_ge,
+			varT_c_ge,
+			G1tilde_P_G2tilde_Vec_ge
+		);
+	    }else{
 	    evec = g_emat.col(ksub);
 	    if(g_is_permute_e){	
 		arma::vec evec_permute = evec.elem(g_permute_e_indices);
@@ -996,14 +1044,11 @@ void mainMarkerInCPP(
 	    //std::cout << "ptr_gSAIGEobj->m_varRatioVa null_eg " << ptr_gSAIGEobj->m_varRatioVal << std::endl;
 	    //
 	   
-
-
-
-            bool iswege = (g_isswemat(i_mt, k) == 1); 
 	    Unified_getMarkerPval_gxe(
                     t_GEVec,
                           false, // bool t_isOnlyOutputNonZero,
-                          indexNonZeroVec_arma, indexZeroVec_arma, Beta_ge, seBeta_ge, pval_ge, pval_noSPA_ge, Tstat_ge, gy_ge, varT_ge, altFreq_ge, isSPAConverge_ge, gtildeVec_ge, is_gtilde_ge, is_region_ge, t_P2Vec_ge, true, Beta_c_ge, seBeta_c_ge, pval_c_ge, pval_noSPA_c_ge, Tstat_c_ge, varT_c_ge, G1tilde_P_G2tilde_Vec_ge, is_Firth_ge, is_FirthConverge_ge, false, true, false, iswege);
+	                          indexNonZeroVec_arma, indexZeroVec_arma, Beta_ge, seBeta_ge, pval_ge, pval_noSPA_ge, Tstat_ge, gy_ge, varT_ge, altFreq_ge, isSPAConverge_ge, gtildeVec_ge, is_gtilde_ge, is_region_ge, t_P2Vec_ge, true, Beta_c_ge, seBeta_c_ge, pval_c_ge, pval_noSPA_c_ge, Tstat_c_ge, varT_c_ge, G1tilde_P_G2tilde_Vec_ge, is_Firth_ge, is_FirthConverge_ge, false, true, false, iswege);
+	    }
 	//std::cout << "HEREa5" << std::endl;
 
     char pValueBuf[100];
@@ -3875,6 +3920,22 @@ bool openOutfile_single(std::string t_traitType, bool t_isImputation, bool isapp
 }
 
 
+// [[Rcpp::export]]
+void closeOutfile_single(){
+     // Step 2 keeps one stream per trait open while processing chunks.  Close
+     // them explicitly before R validates the text output or converts it to
+     // Parquet.  Clearing the vector also prevents a later SAIGE.Marker call
+     // in the same R session from writing through stale stream entries.
+     for(std::ofstream & stream : OutFile_single_vec){
+          if(stream.is_open()){
+               stream.flush();
+               stream.close();
+          }
+     }
+     OutFile_single_vec.clear();
+}
+
+
 void writeOutfile_single(bool t_isMoreOutput,
 			bool t_isImputation,
 			bool t_isCondition,
@@ -4049,6 +4110,12 @@ void writeOutfile_single(bool t_isMoreOutput,
         std::cout << "Firth approx was applied to " << mFirth << " markers. " << mFirthConverge << " sucessfully converged." <<std::endl;
       }
    }
+
+  // Make the completed chunk visible to R immediately.  The output stream is
+  // kept open across chunks, so a small result (especially a single marker)
+  // can otherwise remain entirely in the C++ buffer when the Step 2 wrapper
+  // calls fread() for validation or Parquet conversion.
+  OutFile_single.flush();
 
 
   //}  

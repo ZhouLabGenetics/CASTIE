@@ -301,6 +301,8 @@ bool openOutfile_singleinGroup(std::string t_traitType, bool t_isImputation, boo
 
 bool openOutfile_single(std::string t_traitType, bool t_isImputation, bool isappend, bool t_isMoreOutput, bool t_isGbyE);
 
+void closeOutfile_single();
+
 void writeOutfile_single(bool t_isMoreOutput,
       bool t_isImputation,
                         bool t_isCondition,

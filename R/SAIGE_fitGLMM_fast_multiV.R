@@ -1626,6 +1626,7 @@ if(is.null(eMat)){
   if (isShrinkModelOutput) {
     load(modelOut)
     modglmm$use_sandwich = use_sandwich
+    modglmm$useGRMtoFitNULL = useGRMtoFitNULL  # step 2 uses this to decide whether closed-form GxE conditioning applies
     modglmm$Y <- NULL
     modglmm$linear.predictors <- NULL
     modglmm$coefficients <- NULL
@@ -1643,6 +1644,7 @@ if(is.null(eMat)){
     }
   } else {
     modglmm$use_sandwich = use_sandwich
+    modglmm$useGRMtoFitNULL = useGRMtoFitNULL
   }
   save(modglmm, file = modelOut)
 

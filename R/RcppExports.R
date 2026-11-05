@@ -25,6 +25,10 @@ setAssocTest_GlobalVarsInCPP <- function(t_impute_method, t_missing_cutoff, t_mi
     invisible(.Call('_CASTIE_setAssocTest_GlobalVarsInCPP', PACKAGE = 'CASTIE', t_impute_method, t_missing_cutoff, t_min_maf_marker, t_min_mac_marker, t_min_info_marker, t_dosage_zerod_cutoff, t_dosage_zerod_MAC_cutoff, t_outputFilePrefix, t_MACCutoffforER))
 }
 
+setGxEModelCondInCPP <- function(t_X_cell_gxe, t_W_gxe, t_enable, t_donor_engine) {
+    invisible(.Call('_CASTIE_setGxEModelCondInCPP', PACKAGE = 'CASTIE', t_X_cell_gxe, t_W_gxe, t_enable, t_donor_engine))
+}
+
 setAssocTest_GlobalVarsInCPP_GbyE <- function(t_emat, t_isgxe, t_isUseSandwichVarianceMat, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge) {
     invisible(.Call('_CASTIE_setAssocTest_GlobalVarsInCPP_GbyE', PACKAGE = 'CASTIE', t_emat, t_isgxe, t_isUseSandwichVarianceMat, t_pval_cutoff_for_gxe, t_XV_gxe, t_XXVX_inv_gxe, t_y_gxe, t_res_gxe, t_mu2_gxe, t_mu_gxe, t_varWeights_gxe, t_is_permute_e, t_is_permute_ginge))
 }
@@ -131,6 +135,10 @@ removeOutfile_inSingle <- function() {
 
 openOutfile_single <- function(t_traitType, t_isImputation, isappend, t_isMoreOutput, t_isGbyE) {
     .Call('_CASTIE_openOutfile_single', PACKAGE = 'CASTIE', t_traitType, t_isImputation, isappend, t_isMoreOutput, t_isGbyE)
+}
+
+closeOutfile_single <- function() {
+    invisible(.Call('_CASTIE_closeOutfile_single', PACKAGE = 'CASTIE'))
 }
 
 set_flagSparseGRM_cur_SAIGE <- function(t_flagSparseGRM_cur) {
@@ -772,4 +780,3 @@ mult_den_sp_to_sp <- function(a, b) {
 gen_sp <- function(a) {
     .Call('_CASTIE_gen_sp', PACKAGE = 'CASTIE', a)
 }
-

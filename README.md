@@ -90,6 +90,28 @@ instructions that do not require cloning the repository.
 
 ## Version Updates
 
+### Version 0.2.5.9
+
+- Fixed inflation of the dynamic (GxE) test conditioned on the marginal
+  genotype effect when both the genotype and context main effects are strong.
+  `Var(T_G)`, `Cov(T_GE, T_G)`, and `Var(T_GE)` are now calculated exactly
+  from the fitted null-model covariance instead of using the previous
+  variance-ratio approximation.
+- Added a donor-aggregate engine that evaluates the same exact statistic from
+  donor-level sufficient statistics, avoiding repeated cell-level covariance
+  solves in Step 2.
+- Existing Step 1 model files can be reused. The main-effect test and its
+  variance ratio are unchanged.
+- Added Step 2 options `--gxe_conditioning=model|varratio` and
+  `--gxe_modelcond_engine=donor|cell`. Exact model conditioning and the donor
+  engine are the defaults; unsupported models fall back to the legacy
+  variance-ratio path with a warning.
+- Fixed the legacy variance-ratio indexing path and ensured single-variant
+  text results are flushed before Parquet conversion.
+
+See [`docs/gxe_donor_aggregation.md`](docs/gxe_donor_aggregation.md) for the
+mathematical details and validation commands.
+
 ### Version 0.2.5.8
 
 - fixed beta

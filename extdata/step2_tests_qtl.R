@@ -141,6 +141,10 @@ mean, p-value based on traditional score test is returned. Default value is 2.")
     help="p-value cutoff for using sparse V in Step 2"),
   make_option("--pval_cutoff_for_gxe", type="numeric", default=1,
       help="Main-effect p-value cutoff for running dynamic eQTL tests [default=1]"),
+  make_option("--gxe_conditioning", type="character", default="model",
+      help="How the dynamic (GxE) score is conditioned on the marginal G score: 'model' computes the conditioning exactly from the null-model covariance (requires a null model fit without a GRM; falls back to 'varratio' otherwise), 'varratio' uses the previous variance-ratio approximation [default=model]"),
+  make_option("--gxe_modelcond_engine", type="character", default="donor",
+      help="Engine for exact model-based GxE conditioning: 'donor' uses cached donor-level sufficient statistics (fast default), 'cell' retains the cell-level reference calculation [default=donor]"),
   make_option("--max_MAC_for_ER", type="numeric", default=4,
     help="p-values of genetic variants with MAC <= max_MAC_for_ER will be calculated via efficient resampling. [default=4]"),
   make_option("--is_EmpSPA", type="logical", default=FALSE,
@@ -331,6 +335,8 @@ SPAGMMATtest(vcfFile=opt$vcfFile,
 	     is_sparseGRM = opt$is_sparseGRM,
              pval_cutoff_for_fastTest = opt$pval_cutoff_for_fastTest,
 	     pval_cutoff_for_gxe = opt$pval_cutoff_for_gxe,
+	     gxe_conditioning = opt$gxe_conditioning,
+	     gxe_modelcond_engine = opt$gxe_modelcond_engine,
              max_MAC_use_ER = opt$max_MAC_for_ER,
 	     is_EmpSPA = opt$is_EmpSPA,
 	     is_fastTest = opt$is_fastTest
@@ -397,6 +403,9 @@ SPAGMMATtest(vcfFile=opt$vcfFile,
              is_noadjCov = opt$is_noadjCov,
              is_sparseGRM = opt$is_sparseGRM,
              pval_cutoff_for_fastTest = opt$pval_cutoff_for_fastTest,
+             pval_cutoff_for_gxe = opt$pval_cutoff_for_gxe,
+             gxe_conditioning = opt$gxe_conditioning,
+             gxe_modelcond_engine = opt$gxe_modelcond_engine,
              max_MAC_use_ER = opt$max_MAC_for_ER,
              is_EmpSPA = opt$is_EmpSPA,
              is_fastTest = opt$is_fastTest
@@ -451,7 +460,18 @@ if (opt$output_format == "parquet") {
   candidates <- all_files[startsWith(basename(all_files), out_base)]
   candidates <- candidates[!grepl("\\.(index|bin|parquet)$", candidates)]
   for (f in candidates) {
+    output_size <- file.info(f)$size
+    if (is.na(output_size) || output_size == 0) {
+      stop(
+        "Association output is empty before Parquet conversion: ",
+        f,
+        ". This indicates that the result writer did not finish flushing."
+      )
+    }
     dt <- data.table::fread(f)
+    if (is.null(dt) || ncol(dt) == 0) {
+      stop("Association output could not be parsed before Parquet conversion: ", f)
+    }
     out_pq <- paste0(sub("\\.txt$", "", f), ".parquet")
     arrow::write_parquet(dt, out_pq)
     file.remove(f)
