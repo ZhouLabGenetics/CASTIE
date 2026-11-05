@@ -20,7 +20,8 @@ read_pheno_h5 <- function(phenoFile, phenoCol, sampleIDColinphenoFile, checkColL
   metaNames <- names(h5[["meta"]])
   metaCols <- intersect(checkColList, metaNames)
   data <- data.frame(lapply(metaCols, function(col) h5[["meta"]][[col]]$read()),
-                     stringsAsFactors = FALSE)
+    stringsAsFactors = FALSE
+  )
   colnames(data) <- metaCols
 
   geneNames <- h5[["counts"]][["gene_names"]]$read()
@@ -32,8 +33,8 @@ read_pheno_h5 <- function(phenoFile, phenoCol, sampleIDColinphenoFile, checkColL
   ## indptr is stored as double to support nnz > 2^31; keep as numeric for
   ## indexing (R doubles give 53-bit integers, ample for any realistic dataset)
   indptr_raw <- h5[["counts"]][["indptr"]]$read()
-  ptr_start <- indptr_raw[geneIdx] + 1     # 0-based -> 1-based
-  ptr_end   <- indptr_raw[geneIdx + 1L]
+  ptr_start <- indptr_raw[geneIdx] + 1 # 0-based -> 1-based
+  ptr_end <- indptr_raw[geneIdx + 1L]
   nrows <- nrow(data)
   geneVec <- rep(0L, nrows)
   if (ptr_end >= ptr_start) {
@@ -48,7 +49,9 @@ read_pheno_h5 <- function(phenoFile, phenoCol, sampleIDColinphenoFile, checkColL
   if (sampleIDColinphenoFile %in% colnames(data)) {
     data[[sampleIDColinphenoFile]] <- as.character(data[[sampleIDColinphenoFile]])
   }
-  cat(sprintf("Read phenotype from HDF5: %d rows, gene '%s' (%d non-zeros)\n",
-              nrows, phenoCol, sum(geneVec != 0)))
+  cat(sprintf(
+    "Read phenotype from HDF5: %d rows, gene '%s' (%d non-zeros)\n",
+    nrows, phenoCol, sum(geneVec != 0)
+  ))
   data
 }

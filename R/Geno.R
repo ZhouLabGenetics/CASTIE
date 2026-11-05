@@ -441,8 +441,6 @@ setGenoInput <- function(bgenFile = "",
 }
 
 
-
-
 updateSampleIDs <- function(SampleIDs, samplesInGeno) {
   if (is.null(SampleIDs)) {
     print("Since 'SampleIDs' not specified, we use all samples in 'GenoFile'.")

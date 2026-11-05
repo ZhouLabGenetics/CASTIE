@@ -128,7 +128,6 @@ glmmkin.ai_PCG_Rcpp_multiV_NB <- function(bedFile, bimFile, famFile, Xorig, isCo
     )
 
 
-
     system.time(modglmm_gaussian <- glmmkin.ai_PCG_Rcpp_multiV(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
       fit0_gaussian,
       tau = tau, fixtau = fixtau, maxiter = maxiter,
@@ -205,7 +204,6 @@ glmmkin.ai_PCG_Rcpp_multiV_NB <- function(bedFile, bimFile, famFile, Xorig, isCo
   mu.eta.val <- ifelse(mu.eta.val == 0, 1e-04, mu.eta.val)
   varmu <- fam$variance(mu)
   varmu <- ifelse(varmu == 0, 1e-04, varmu)
-
 
 
   converged <- ifelse(i < maxiter, TRUE, FALSE)

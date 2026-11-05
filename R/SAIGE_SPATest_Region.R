@@ -76,7 +76,6 @@ setSparseSigma_new <- function(sparseGRMFile, sparseGRMSampleIDFile, relatedness
 }
 
 
-
 # DosageCutoff_for_UltraRarePresence,
 # method_to_CollapseUltraRare,
 ## working
@@ -223,9 +222,6 @@ SAIGE.Region <- function(mu,
     cat("Equal weights are used in the group test\n")
     weightlist <- c(weightlist, "Equal_Weights")
   }
-
-
-
 
 
   if (is_weight_included) {
@@ -829,8 +825,6 @@ SAIGE.Region <- function(mu,
               # print(ta1 - ta0)
 
 
-
-
               .f <- function() {
                 if (is_fastTest) {
                   if (cctpval < pval_cutoff_for_fastTest) {
@@ -923,8 +917,6 @@ SAIGE.Region <- function(mu,
                         wadjVarSMat_cond_list[[ia]] <- wadjVarSMat_cond
                       }
                     }
-
-
 
 
                     # gc()
@@ -1036,8 +1028,6 @@ SAIGE.Region <- function(mu,
                                 resultDF$SE_Burden_cond <- groupOutList_cond$SE_Burden
 
 
-
-
                                 # resultDF$Pvalue_cond = groupOutList_cond$Pvalue_SKATO
                                 # resultDF$Pvalue_Burden_cond = groupOutList_cond$Pvalue_Burden
                                 # resultDF$Pvalue_SKAT_cond = groupOutList_cond$Pvalue_SKAT
@@ -1073,7 +1063,6 @@ SAIGE.Region <- function(mu,
 
                     gc()
                     # }
-
 
 
                     # if(regionTestType != "BURDEN"){
@@ -1243,7 +1232,6 @@ SAIGE.Region <- function(mu,
         # cat("indexChunk ", indexChunk, "\n")
 
 
-
         message4 <- paste("Have completed the analysis of chunk", indexChunk)
         message5 <- "Have completed the analyses of all chunks."
         # n1 = length(Output)
@@ -1361,7 +1349,6 @@ SAIGE.Region <- function(mu,
 
   return(message)
 }
-
 
 
 SAIGE.getRegionList_new <- function(marker_group_line,

@@ -35,22 +35,21 @@ checkArgNumeric <- function(arg0, arg0name, minVal = NULL, maxVal = NULL, incMin
 }
 
 
-
-
 checkArgsListNumeric <- function(
-    start,
-    end,
-    max_missing,
-    min_MAC,
-    min_MAF,
-    min_Info,
-    SPAcutoff,
-    dosage_zerod_cutoff,
-    dosage_zerod_MAC_cutoff,
-    markers_per_chunk,
-    groups_per_chunk,
-    minGroupMAC_in_BurdenTest,
-    max_MAC_use_ER) {
+  start,
+  end,
+  max_missing,
+  min_MAC,
+  min_MAF,
+  min_Info,
+  SPAcutoff,
+  dosage_zerod_cutoff,
+  dosage_zerod_MAC_cutoff,
+  markers_per_chunk,
+  groups_per_chunk,
+  minGroupMAC_in_BurdenTest,
+  max_MAC_use_ER
+) {
   checkArgNumeric(start, deparse(substitute(start)), 1, 250000000)
   checkArgNumeric(end, deparse(substitute(end)), 1, 250000000)
   checkArgNumeric(max_missing, deparse(substitute(max_missing, )), 0, 1)
@@ -71,8 +70,6 @@ checkArgsListNumeric <- function(
 }
 
 
-
-
 checkArgsListBool <- function(is_imputed_data,
                               LOCO,
                               is_output_moreDetails,
@@ -85,7 +82,6 @@ checkArgsListBool <- function(is_imputed_data,
   checkArgBool(is_overwrite_output, deparse(substitute(is_overwrite_output)))
   # checkArgBool(is_rewrite_XnonPAR_forMales, deparse(substitute(is_rewrite_XnonPAR_forMales)))
 }
-
 
 
 # checkArgsList_for_Region = function(method_to_CollapseUltraRare,

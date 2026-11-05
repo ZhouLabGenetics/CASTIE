@@ -180,7 +180,6 @@ pcg <- function(A, b, M = NULL, maxiter = 1e+05, tol = 1e-06) {
 }
 
 
-
 pcgSparse <- function(A, b, M = NULL, maxiter = 1e+05, tol = 1e-06) {
   # A<-a; b<-c1[,1]; M<-NULL;maxiter = 1e+05; tol = 1e-06
   if (is.null(M)) {
@@ -247,8 +246,9 @@ pcgSparse <- function(A, b, M = NULL, maxiter = 1e+05, tol = 1e-06) {
 }
 
 getVmatSub <- function(
-    sparseVFile = NULL, sparseVSampleIDFile = "",
-    modelID = NULL) {
+  sparseVFile = NULL, sparseVSampleIDFile = "",
+  modelID = NULL
+) {
   cat("Extract matrix in ", sparseVFile, "\n")
   sparseVLarge <- Matrix:::readMM(sparseVFile)
   print(nnzero(sparseVLarge))
@@ -367,7 +367,6 @@ set_Vmat_vec <- function(VmatFilelist, VmatSampleFilelist, modelID, longlVarVec 
 }
 
 
-
 set_Vmat_vec_orig <- function(VmatFilelist, VmatSampleFilelist, modelID) {
   if (VmatFilelist != "") {
     VmatFile_vec <- unlist(strsplit(VmatFilelist, split = ","))
@@ -397,12 +396,10 @@ set_Vmat_vec_orig <- function(VmatFilelist, VmatSampleFilelist, modelID) {
 }
 
 
-
-
-
 getsubGRM_orig <- function(
-    sparseGRMFile = NULL, sparseGRMSampleIDFile = "", relatednessCutoff,
-    modelID = NULL) {
+  sparseGRMFile = NULL, sparseGRMSampleIDFile = "", relatednessCutoff,
+  modelID = NULL
+) {
   cat("extract sparse GRM\n")
   sparseGRMLarge <- Matrix:::readMM(sparseGRMFile)
   print(nnzero(sparseGRMLarge))
@@ -470,15 +467,12 @@ set_dup_sample_index_inR <- function(modelID) {
 }
 
 
-
-
 set_I_mat_inR <- function(modelID) {
   b <- as.numeric(factor(modelID, levels = unique(modelID)))
   I_mat <- Matrix::sparseMatrix(i = 1:length(b), j = b, x = rep(1, length(b)))
   I_mat <- 1.0 * I_mat
   set_I_longl_mat(I_mat, b - 1)
 }
-
 
 
 set_T_mat_inR <- function(modelID, longlVarVec = NULL) {
@@ -493,10 +487,10 @@ set_T_mat_inR <- function(modelID, longlVarVec = NULL) {
 }
 
 
-
 getsubGRM <- function(
-    sparseGRMFile = NULL, sparseGRMSampleIDFile = "", relatednessCutoff,
-    modelID = NULL, longlVarVec = NULL) {
+  sparseGRMFile = NULL, sparseGRMSampleIDFile = "", relatednessCutoff,
+  modelID = NULL, longlVarVec = NULL
+) {
   cat("extract sparse GRM\n")
   sparseGRMLarge <- Matrix:::readMM(sparseGRMFile)
   print(nnzero(sparseGRMLarge))
@@ -619,10 +613,10 @@ checkPerfectSep <- function(formula, data, minCovariateCount) {
 preprocess_E <- function(E, epsilon = 1e-6, rank_approx = NULL) {
   # Centering
   E <- sweep(E, 2, colMeans(E), "-")
-  
+
   # Scaling
   E <- sweep(E, 2, apply(E, 2, sd), "/")
-  
+
   # Regularization
   if (!is.null(rank_approx)) {
     svd_decomp <- svd(E)
@@ -630,6 +624,6 @@ preprocess_E <- function(E, epsilon = 1e-6, rank_approx = NULL) {
     Sigma_k <- diag(svd_decomp$d[1:rank_approx])
     E <- U_k %*% Sigma_k
   }
-  
+
   return(E)
 }

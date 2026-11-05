@@ -156,7 +156,6 @@ ReadModel <- function(GMMATmodelFile = "", chrom = "", LOCO = TRUE, is_Firth_bet
   }
 
 
-
   if (is_Firth_beta) {
     if (modglmm$traitType == "binary") {
       if (is.null(modglmm$offset)) {
@@ -245,8 +244,6 @@ ReadModel <- function(GMMATmodelFile = "", chrom = "", LOCO = TRUE, is_Firth_bet
 
   return(modglmm)
 }
-
-
 
 
 Get_Variance_Ratio <- function(varianceRatioFile, cateVarRatioMinMACVecExclude, cateVarRatioMaxMACVecInclude, isGroupTest, isSparseGRM, useSparseGRMtoFitNULL) {
@@ -386,8 +383,6 @@ ReadModel_multiTrait <- function(GMMATmodelFileList = "", chrom = "", LOCO = TRU
   }
   return(modglmmList)
 }
-
-
 
 
 Get_Variance_Ratio_multiTrait <- function(varianceRatioFileList, cateVarRatioMinMACVecExclude, cateVarRatioMaxMACVecInclude, isGroupTest, isSparseGRM, useSparseGRMtoFitNULL) {

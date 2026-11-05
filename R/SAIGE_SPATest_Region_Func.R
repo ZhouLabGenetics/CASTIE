@@ -420,8 +420,6 @@ get_SKAT_pvalue_Burden_SKAT <- function(Score, Phi) {
   }
 
 
-
-
   return(list(Pvalue_Burden = Pvalue_BURDEN, Pvalue_SKAT = Pvalue_SKAT, BETA_Burden = BETA_BURDEN, SE_Burden = SE_BURDEN))
 }
 

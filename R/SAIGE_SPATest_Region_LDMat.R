@@ -205,8 +205,6 @@ SAIGE.Region.LDmat <- function(OutputFile,
     mth <- mth + 1
 
 
-
-
     if (!is.null(RegionList)) {
       pval.Region <- NULL
       region <- RegionList[[mth]]
@@ -228,7 +226,6 @@ SAIGE.Region.LDmat <- function(OutputFile,
           }
 
           isVcfEnd <- check_Vcf_end()
-
 
 
           if (!isVcfEnd) {
@@ -286,7 +283,6 @@ SAIGE.Region.LDmat <- function(OutputFile,
   gc()
   close(gf)
 }
-
 
 
 SAIGE.getRegionList_forLDmat <- function(marker_group_line,

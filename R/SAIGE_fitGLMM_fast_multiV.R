@@ -141,8 +141,8 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     useSparseGRMtoFitNULL <- FALSE
     useSparseGRMforVarRatio <- FALSE
     LOCO <- FALSE
-    #nThreads <- 1
-    #cat("No GRM will be used to fit the NULL model and nThreads is set to 1\n")
+    # nThreads <- 1
+    # cat("No GRM will be used to fit the NULL model and nThreads is set to 1\n")
   }
 
 
@@ -191,7 +191,6 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
   }
 
 
-
   if (useSparseGRMtoFitNULL | useSparseGRMforVarRatio) {
     if (!file.exists(sparseGRMFile)) {
       stop("sparseGRMFile ", sparseGRMFile, " does not exist!")
@@ -222,16 +221,21 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
   ## so use `ncol` for the trailing "max used (Mb)" column and `2` for "used (Mb)"
   ## (always the second column).
   .report_mem <- function(label) {
-    if (!verbose) return(invisible(NULL))
+    if (!verbose) {
+      return(invisible(NULL))
+    }
     .gc <- gc(verbose = FALSE)
     rss_mb <- tryCatch(
       as.numeric(system2("ps", c("-o", "rss=", "-p", Sys.getpid()),
-                         stdout = TRUE, stderr = FALSE)) / 1024,
+        stdout = TRUE, stderr = FALSE
+      )) / 1024,
       error = function(e) NA_real_
     )
-    cat(sprintf("[MEM] %s: R-used=%.0f MB, R-peak=%.0f MB, OS-RSS=%.0f MB\n",
-                label, sum(.gc[, 2]), sum(.gc[, ncol(.gc)]),
-                if (length(rss_mb) == 0 || is.na(rss_mb)) NA_real_ else rss_mb))
+    cat(sprintf(
+      "[MEM] %s: R-used=%.0f MB, R-peak=%.0f MB, OS-RSS=%.0f MB\n",
+      label, sum(.gc[, 2]), sum(.gc[, ncol(.gc)]),
+      if (length(rss_mb) == 0 || is.na(rss_mb)) NA_real_ else rss_mb
+    ))
   }
 
   ## Estimate the SMW cache size in MB and decide whether to populate it.
@@ -240,19 +244,33 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
   ## Returns list(estMB, allowed) where `allowed=FALSE` means caller should skip
   ## prepareSigmaInvSMW_multiV and use the per-vector fallback.
   .smw_cache_decision <- function(eMat, label) {
-    if (is.null(eMat)) return(list(estMB = 0, allowed = FALSE))
-    N <- nrow(eMat); k <- ncol(eMat)
+    if (is.null(eMat)) {
+      return(list(estMB = 0, allowed = FALSE))
+    }
+    N <- nrow(eMat)
+    k <- ncol(eMat)
     n_donors <- if (exists("modglmm", inherits = FALSE) &&
-                    !is.null(modglmm$sampleID))
-                  length(unique(modglmm$sampleID)) else NA_real_
+      !is.null(modglmm$sampleID)) {
+      length(unique(modglmm$sampleID))
+    } else {
+      NA_real_
+    }
     bytes <- 4 * (N * (2 + 2 * k) + (if (is.na(n_donors)) 0 else n_donors) * k^2)
     estMB <- bytes / (1024 * 1024)
-    over  <- !is.null(smwCacheMemLimitMB) && estMB > smwCacheMemLimitMB
-    cat(sprintf("[SMW] %s: estimated cache size = %.0f MB (N=%d, k=%d%s)%s\n",
-                label, estMB, N, k,
-                if (is.na(n_donors)) "" else sprintf(", D=%d", as.integer(n_donors)),
-                if (over) sprintf(" -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
-                                  smwCacheMemLimitMB) else ""))
+    over <- !is.null(smwCacheMemLimitMB) && estMB > smwCacheMemLimitMB
+    cat(sprintf(
+      "[SMW] %s: estimated cache size = %.0f MB (N=%d, k=%d%s)%s\n",
+      label, estMB, N, k,
+      if (is.na(n_donors)) "" else sprintf(", D=%d", as.integer(n_donors)),
+      if (over) {
+        sprintf(
+          " -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
+          smwCacheMemLimitMB
+        )
+      } else {
+        ""
+      }
+    ))
     list(estMB = estMB, allowed = !over)
   }
 
@@ -334,13 +352,12 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
   if (!file.exists(phenoFile)) {
     stop("ERROR! phenoFile ", phenoFile, " does not exsit\n")
   } else {
-
     if (length(eCovarCol) > 0) {
       cat(eCovarCol, "are environmental covariates\n")
       if (!all(eCovarCol %in% covarColList)) {
         stop("ERROR! all covariates in eCovarCol must be in covarColList\n")
       }
-      longlCol = ""
+      longlCol <- ""
     }
 
     if (longlCol == "") {
@@ -366,7 +383,6 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     if (isPhenoHDF5) {
       ## ---- HDF5 format: read metadata + one gene column from sparse matrix ----
       data <- read_pheno_h5(phenoFile, phenoCol, sampleIDColinphenoFile, checkColList)
-
     } else {
       ## ---- Plain text format (tsv/csv/gz/bgz) ----
       isCompressed <- grepl("\\.(gz|bgz)$", phenoFile)
@@ -415,8 +431,10 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
 
         ## extract columns to temp file, then fread from file (fastest path)
         ## use a stable cache name so repeated calls (fallback stages) skip re-extraction
-        phenoFiletemp <- file.path(dirname(outputPrefix),
-          paste0(".saige_subcols_", phenoCol, "_cache"))
+        phenoFiletemp <- file.path(
+          dirname(outputPrefix),
+          paste0(".saige_subcols_", phenoCol, "_cache")
+        )
         if (!file.exists(phenoFiletemp)) {
           if (useAwk) {
             awkFields <- paste0("$", colIndices, collapse = ",")
@@ -470,7 +488,6 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
         stop("ERROR: no samples are left after removing zeros in the phenotype\n")
       }
     }
-
 
 
     if (SampleIDIncludeFile != "") {
@@ -567,7 +584,6 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     }
 
 
-
     if (length(covarColList) > 0) {
       if (length(qCovarCol) > 0) {
         covarColList <- colnames(mmat)[2:(ncol(mmat) - coln)]
@@ -635,37 +651,34 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
       cat(eCovarCol, "are environmental covariates\n")
       eMat <- dataMerge_sort[, which(colnames(dataMerge_sort) %in% eCovarCol), drop = F]
       for (em in 1:ncol(eMat)) {
-        #eMat[, em] <- (eMat[, em] - mean(eMat[, em])) / (sqrt(ncol(eMat))*sd(eMat[, em]))
+        # eMat[, em] <- (eMat[, em] - mean(eMat[, em])) / (sqrt(ncol(eMat))*sd(eMat[, em]))
         eMat[, em] <- (eMat[, em] - mean(eMat[, em])) / (sd(eMat[, em]))
       }
-    eMat = as.matrix(eMat)
-    #print("HERE set_EMat")
-    #eMat = preprocess_E(eMat)
-    set_EMat(eMat) 
-    
-    eMatcolNames <- checkColList[checkColList %in% eCovarCol]
-    eMatIsSample <- eMatcolNames %in% sampleCovarCol
-    
-    
-    ##remove e cov from the covariates list
-    #print("Here covarColList 0 ")
-    #print(covarColList)
-    #covarColList =  covarColList[!(covarColList %in% eCovarCol)]
-    #formula <- paste0(phenoCol, "~", paste0(covarColList,
-    #  collapse = "+"
-    #))
-    #formula.null <- as.formula(formula)
-    #print("eCovarCol")
-    #print(eCovarCol)
+      eMat <- as.matrix(eMat)
+      # print("HERE set_EMat")
+      # eMat = preprocess_E(eMat)
+      set_EMat(eMat)
+
+      eMatcolNames <- checkColList[checkColList %in% eCovarCol]
+      eMatIsSample <- eMatcolNames %in% sampleCovarCol
 
 
-    }else{
-
-      eMat = NULL
+      ## remove e cov from the covariates list
+      # print("Here covarColList 0 ")
+      # print(covarColList)
+      # covarColList =  covarColList[!(covarColList %in% eCovarCol)]
+      # formula <- paste0(phenoCol, "~", paste0(covarColList,
+      #  collapse = "+"
+      # ))
+      # formula.null <- as.formula(formula)
+      # print("eCovarCol")
+      # print(eCovarCol)
+    } else {
+      eMat <- NULL
     }
 
-    #print("Here covarColList")
-    #print(covarColList)
+    # print("Here covarColList")
+    # print(covarColList)
 
     rm(mmat)
     rm(mmat_nomissing)
@@ -708,7 +721,6 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
   }
 
 
-
   print("Test3")
   print(head(dataMerge_sort))
 
@@ -725,10 +737,10 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     dataMerge_sort[, which(colnames(dataMerge_sort) == phenoCol)] <- invPheno
   }
 
-  #if(length(eCovarCol) > 0){
+  # if(length(eCovarCol) > 0){
   #      dataMerge_sort <- dataMerge_sort[, !(names(dataMerge_sort) %in%
-  #	      eCovarCol)]
-  #}
+  # 	      eCovarCol)]
+  # }
   print("Test4")
   print(head(dataMerge_sort))
   if (traitType == "binary" & (length(covarColList) > 0)) {
@@ -775,8 +787,8 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
     )
 
     if (length(offsetCol) > 0) {
-      data.new <- cbind(data.new, dataMerge_sort[,which(colnames(dataMerge_sort) == offsetCol)])
-      colnames(data.new)[ncol(data.new)] = offsetCol
+      data.new <- cbind(data.new, dataMerge_sort[, which(colnames(dataMerge_sort) == offsetCol)])
+      colnames(data.new)[ncol(data.new)] <- offsetCol
     }
   } else {
     formula.new <- formula.null
@@ -886,60 +898,60 @@ fitNULLGLMM_multiV <- function(plinkFile = "",
 
   cat("numofV ", numofV, "\n")
 
-if(is.null(eMat)){  
-  if (any(duplicated(dataMerge_sort$IID))) {
-    print("HERE")
-    if (longlCol == "") {
-      print("HERE1")
-      print(useGRMtoFitNULL)
+  if (is.null(eMat)) {
+    if (any(duplicated(dataMerge_sort$IID))) {
+      print("HERE")
+      if (longlCol == "") {
+        print("HERE1")
+        print(useGRMtoFitNULL)
+        if (useGRMtoFitNULL) {
+          print("HERE2")
+          num_Kmat <- numofV + 3
+          cat("num_Kmat ", num_Kmat, "\n")
+        } else {
+          num_Kmat <- numofV + 2
+        }
+        # k = num_Kmat + 3
+      } else {
+        if (useGRMtoFitNULL) {
+          num_Kmat <- 7 + numofV * 3
+        } else {
+          num_Kmat <- 4 + numofV * 3
+        }
+        # k = num_Kmat + 2
+      }
+    } else {
       if (useGRMtoFitNULL) {
-        print("HERE2")
+        num_Kmat <- numofV + 2
+      } else {
+        num_Kmat <- numofV + 1
+      }
+      # k = 2
+    }
+  } else { # if(nrow(eMat) == 0){
+    if (any(duplicated(dataMerge_sort$IID))) {
+      num_Kmat <- numofV + 3
+    } else {
+      if (useGRMtoFitNULL) {
         num_Kmat <- numofV + 3
-        cat("num_Kmat ", num_Kmat, "\n")
       } else {
         num_Kmat <- numofV + 2
       }
-      # k = num_Kmat + 3
-    } else {
-      if (useGRMtoFitNULL) {
-        num_Kmat <- 7 + numofV * 3
-      } else {
-        num_Kmat <- 4 + numofV * 3
-      }
-      # k = num_Kmat + 2
-    }
-  } else {
-    if (useGRMtoFitNULL) {
-      num_Kmat <- numofV + 2
-    } else {
-      num_Kmat <- numofV + 1
-    }
-    # k = 2
-  }
-}else{ #if(nrow(eMat) == 0){
-  if (any(duplicated(dataMerge_sort$IID))) {
-    num_Kmat <- numofV + 3
-  }else{
-    if (useGRMtoFitNULL) {
-      num_Kmat <- numofV + 3
-    }else{
-      num_Kmat <- numofV + 2
     }
   }
-}
 
 
   k <- num_Kmat
 
-  
+
   set_num_Kmat(num_Kmat)
   cat("num_Kmat ", num_Kmat, "\n")
 
 
-  if(!is.null(eMat)){
-        print("dim(eMat)")
-  	print(dim(eMat))
-  #	k = 3
+  if (!is.null(eMat)) {
+    print("dim(eMat)")
+    print(dim(eMat))
+    # 	k = 3
   }
 
 
@@ -1132,7 +1144,7 @@ if(is.null(eMat)){
   # }
   print("isStoreSigma")
   print(isStoreSigma)
-  #set_store_sigma(isStoreSigma)
+  # set_store_sigma(isStoreSigma)
 
   cat(sprintf("[TIMING] Initial GLM fit: %.1fs\n", (proc.time() - .t_glm)[3]))
   .report_mem("after Initial GLM fit")
@@ -1152,41 +1164,39 @@ if(is.null(eMat)){
     set_useGRMtoFitNULL(useGRMtoFitNULL)
 
     if (traitType != "count_nb") {
-    if(length(eCovarCol) == 0){
-      system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
-        fit0,
-        tau = tau, fixtau = fixtau, maxiter = maxiter,
-        tol = tol, verbose = TRUE, nrun = nrun, tolPCG = tolPCG,
-        maxiterPCG = maxiterPCG, subPheno = dataMerge_sort, indicatorGenoSamplesWithPheno = indicatorGenoSamplesWithPheno,
-        obj.noK = obj.noK, out.transform = out.transform,
-        tauInit = tauInit, memoryChunk = memoryChunk,
-        LOCO = LOCO, chromosomeStartIndexVec = chromosomeStartIndexVec,
-        chromosomeEndIndexVec = chromosomeEndIndexVec,
-        traceCVcutoff = traceCVcutoff, isCovariateTransform = isCovariateTransform,
-        isDiagofKinSetAsOne = isDiagofKinSetAsOne,
-        isLowMemLOCO = isLowMemLOCO, covarianceIdxMat = covarianceIdxMat, isStoreSigma = isStoreSigma, useSparseGRMtoFitNULL = useSparseGRMtoFitNULL, useGRMtoFitNULL = useGRMtoFitNULL, isSparseGRMIdentity = isSparseGRMIdentity
-      ))
-    }else{ #if(length(eCovarCol) == 0){
+      if (length(eCovarCol) == 0) {
+        system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
+          fit0,
+          tau = tau, fixtau = fixtau, maxiter = maxiter,
+          tol = tol, verbose = TRUE, nrun = nrun, tolPCG = tolPCG,
+          maxiterPCG = maxiterPCG, subPheno = dataMerge_sort, indicatorGenoSamplesWithPheno = indicatorGenoSamplesWithPheno,
+          obj.noK = obj.noK, out.transform = out.transform,
+          tauInit = tauInit, memoryChunk = memoryChunk,
+          LOCO = LOCO, chromosomeStartIndexVec = chromosomeStartIndexVec,
+          chromosomeEndIndexVec = chromosomeEndIndexVec,
+          traceCVcutoff = traceCVcutoff, isCovariateTransform = isCovariateTransform,
+          isDiagofKinSetAsOne = isDiagofKinSetAsOne,
+          isLowMemLOCO = isLowMemLOCO, covarianceIdxMat = covarianceIdxMat, isStoreSigma = isStoreSigma, useSparseGRMtoFitNULL = useSparseGRMtoFitNULL, useGRMtoFitNULL = useGRMtoFitNULL, isSparseGRMIdentity = isSparseGRMIdentity
+        ))
+      } else { # if(length(eCovarCol) == 0){
 
-     print("glmmkin.ai_PCG_Rcpp_multiV_eMat")
-     print(fit0)
+        print("glmmkin.ai_PCG_Rcpp_multiV_eMat")
+        print(fit0)
 
-      system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV_eMat(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
-        fit0,
-        tau = tau, fixtau = fixtau, maxiter = maxiter,
-        tol = tol, verbose = TRUE, nrun = nrun, tolPCG = tolPCG,
-        maxiterPCG = maxiterPCG, subPheno = dataMerge_sort, indicatorGenoSamplesWithPheno = indicatorGenoSamplesWithPheno,
-        obj.noK = obj.noK, out.transform = out.transform,
-        tauInit = tauInit, memoryChunk = memoryChunk,
-        LOCO = LOCO, chromosomeStartIndexVec = chromosomeStartIndexVec,
-        chromosomeEndIndexVec = chromosomeEndIndexVec,
-        traceCVcutoff = traceCVcutoff, isCovariateTransform = isCovariateTransform,
-        isDiagofKinSetAsOne = isDiagofKinSetAsOne,
-        isLowMemLOCO = isLowMemLOCO, covarianceIdxMat = covarianceIdxMat, isStoreSigma = isStoreSigma, useSparseGRMtoFitNULL = useSparseGRMtoFitNULL, useGRMtoFitNULL = useGRMtoFitNULL, isSparseGRMIdentity = isSparseGRMIdentity
-      ))
-
-
-    }
+        system.time(modglmm <- glmmkin.ai_PCG_Rcpp_multiV_eMat(bedFile, bimFile, famFile, Xorig, isCovariateOffset,
+          fit0,
+          tau = tau, fixtau = fixtau, maxiter = maxiter,
+          tol = tol, verbose = TRUE, nrun = nrun, tolPCG = tolPCG,
+          maxiterPCG = maxiterPCG, subPheno = dataMerge_sort, indicatorGenoSamplesWithPheno = indicatorGenoSamplesWithPheno,
+          obj.noK = obj.noK, out.transform = out.transform,
+          tauInit = tauInit, memoryChunk = memoryChunk,
+          LOCO = LOCO, chromosomeStartIndexVec = chromosomeStartIndexVec,
+          chromosomeEndIndexVec = chromosomeEndIndexVec,
+          traceCVcutoff = traceCVcutoff, isCovariateTransform = isCovariateTransform,
+          isDiagofKinSetAsOne = isDiagofKinSetAsOne,
+          isLowMemLOCO = isLowMemLOCO, covarianceIdxMat = covarianceIdxMat, isStoreSigma = isStoreSigma, useSparseGRMtoFitNULL = useSparseGRMtoFitNULL, useGRMtoFitNULL = useGRMtoFitNULL, isSparseGRMIdentity = isSparseGRMIdentity
+        ))
+      }
 
 
       modglmm$obj.glm.null$model <- data.frame(modglmm$obj.glm.null$model)
@@ -1267,24 +1277,23 @@ if(is.null(eMat)){
       }
     }
 
-####to simplify
+    #### to simplify
 
     if (length(eCovarCol) > 0) {
       cat(eCovarCol, "are environmental covariates\n")
-      modglmm$eMat = eMat
-      eMatcolNames = checkColList[checkColList %in% eCovarCol]
-      eMatIsSample = eMatcolNames %in% sampleCovarCol
-      modglmm$eMatcolNames = eMatcolNames
-      modglmm$eMatIsSample = eMatIsSample
-      
-      
-      #modglmm$eMat <- data.new[, which(colnames(data.new) %in% eCovarCol), drop = F]
-      #for (em in 1:ncol(modglmm$eMat)) {
-      #  modglmm$eMat[, em] <- (modglmm$eMat[, em] - mean(modglmm$eMat[, em])) / (sd(modglmm$eMat[, em]))
-      #}
-    }
-#####
+      modglmm$eMat <- eMat
+      eMatcolNames <- checkColList[checkColList %in% eCovarCol]
+      eMatIsSample <- eMatcolNames %in% sampleCovarCol
+      modglmm$eMatcolNames <- eMatcolNames
+      modglmm$eMatIsSample <- eMatIsSample
 
+
+      # modglmm$eMat <- data.new[, which(colnames(data.new) %in% eCovarCol), drop = F]
+      # for (em in 1:ncol(modglmm$eMat)) {
+      #  modglmm$eMat[, em] <- (modglmm$eMat[, em] - mean(modglmm$eMat[, em])) / (sd(modglmm$eMat[, em]))
+      # }
+    }
+    #####
 
 
     if (length(sampleCovarCol) > 0) {
@@ -1295,12 +1304,6 @@ if(is.null(eMat)){
       uniqsampleind <- which(!duplicated(modglmm$sampleID))
       modglmm$sampleXMat <- modglmm$sampleXMat[uniqsampleind, ]
     }
-
-
-
-
-
-
 
 
     .t_post <- proc.time()
@@ -1355,8 +1358,12 @@ if(is.null(eMat)){
       } else {
         modglmm$spSigma <- gettI_Sigma_I_multiV(W, tauVecNew, maxiterPCG, tolPCG, LOCO = FALSE)
       }
-      if (verbose) cat(sprintf("[TIMING:PP] gettI_Sigma_I_multiV: %.2fs (cached=%s)\n",
-                  (proc.time() - .t_pp_spsigma)[3], pp_smw_cached))
+      if (verbose) {
+        cat(sprintf(
+          "[TIMING:PP] gettI_Sigma_I_multiV: %.2fs (cached=%s)\n",
+          (proc.time() - .t_pp_spsigma)[3], pp_smw_cached
+        ))
+      }
       # }else{
       # 	gen_sp_Sigma_multiV(W, tauVecNew)
       # 	spSigma = get_sp_Sigma_to_R()
@@ -1369,39 +1376,37 @@ if(is.null(eMat)){
     tau <- modglmm$theta
     alpha0 <- modglmm$coefficients
 
-    #Sigma_iX
- if(FALSE){   
-    if (!is.null(modglmm$eMat)) {
-      etileMat = NULL
-      P2Mat_E = NULL
-      Scorevec_E = NULL
-      VarMat_E = matrix(0, nrow=ncol(eMat), ncol=ncol(eMat))
-      #if(isShrinkModelOutput){Sigma_iXXSigma_iX <- Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX))}
-	for (ne in 1:ncol(eMat)) {
-		evec = eMat[, ne]
-		evec_tilde <- evec - modglmm$obj.noK$XXVX_inv %*% (modglmm$obj.noK$XV %*% evec)
-		etileMat = cbind(etileMat, evec_tilde)
-	}
+    # Sigma_iX
+    if (FALSE) {
+      if (!is.null(modglmm$eMat)) {
+        etileMat <- NULL
+        P2Mat_E <- NULL
+        Scorevec_E <- NULL
+        VarMat_E <- matrix(0, nrow = ncol(eMat), ncol = ncol(eMat))
+        # if(isShrinkModelOutput){Sigma_iXXSigma_iX <- Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX))}
+        for (ne in 1:ncol(eMat)) {
+          evec <- eMat[, ne]
+          evec_tilde <- evec - modglmm$obj.noK$XXVX_inv %*% (modglmm$obj.noK$XV %*% evec)
+          etileMat <- cbind(etileMat, evec_tilde)
+        }
 
 
-
-      for (ne in 1:ncol(eMat)) {
-      	evec_tilde = etileMat[, ne]
-	S_E <- innerProduct(evec_tilde, modglmm$residuals * modglmm$varWeights)
-	Scorevec_E = c(Scorevec_E, S_E)
-	Sigma_iE <- getSigma_G_multiV(W, tauVecNew, evec_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
-	for(ne2 in 1:ncol(eMat)){
-		evec_tilde2 = etileMat[, ne2]
-		varE = t(evec_tilde2) %*% Sigma_iE  - t(evec_tilde2)%*% Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX)) %*% t(modglmm$X) %*% Sigma_iE	 
-		VarMat_E[ne, ne2] = varE
-	}
+        for (ne in 1:ncol(eMat)) {
+          evec_tilde <- etileMat[, ne]
+          S_E <- innerProduct(evec_tilde, modglmm$residuals * modglmm$varWeights)
+          Scorevec_E <- c(Scorevec_E, S_E)
+          Sigma_iE <- getSigma_G_multiV(W, tauVecNew, evec_tilde, maxiterPCG, tolPCG, LOCO = FALSE)
+          for (ne2 in 1:ncol(eMat)) {
+            evec_tilde2 <- etileMat[, ne2]
+            varE <- t(evec_tilde2) %*% Sigma_iE - t(evec_tilde2) %*% Sigma_iX %*% (solve(t(modglmm$X) %*% Sigma_iX)) %*% t(modglmm$X) %*% Sigma_iE
+            VarMat_E[ne, ne2] <- varE
+          }
+        }
+        modglmm$etileMat <- etileMat
+        modglmm$Scorevec_E <- Scorevec_E
+        modglmm$VarMat_E <- VarMat_E
       }
-      modglmm$etileMat = etileMat
-      modglmm$Scorevec_E = Scorevec_E
-      modglmm$VarMat_E = VarMat_E
-    }  
-
-}# if(FALSE){
+    } # if(FALSE){
 
 
     if (!is.null(out.transform) & is.null(fit0$offset)) {
@@ -1508,12 +1513,10 @@ if(is.null(eMat)){
       if (verbose) cat(sprintf("[TIMING:PP] save modglmm: %.2fs\n", (proc.time() - .t_pp_save)[3]))
     }
 
-  if(sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10){
-
-	cat(modglmm$theta)
-	stop("Tau estimates out of bound: possible model divergence")
-  } 
-    
+    if (sum(modglmm$theta[2:length(modglmm$theta)]) < 0 || sum(modglmm$theta[2:length(modglmm$theta)]) > 10) {
+      cat(modglmm$theta)
+      stop("Tau estimates out of bound: possible model divergence")
+    }
 
 
     t_end <- proc.time()
@@ -1598,7 +1601,7 @@ if(is.null(eMat)){
     }
     cat("Start estimating variance ratios\n")
     load(modelOut)
-    use_sandwich = extractVarianceRatio_multiV(
+    use_sandwich <- extractVarianceRatio_multiV(
       obj.glmm.null = modglmm,
       obj.glm.null = fit0, maxiterPCG = maxiterPCG,
       tolPCG = tolPCG, numMarkers = numMarkersForVarRatio, varRatioOutFile = varRatioFile,
@@ -1618,15 +1621,15 @@ if(is.null(eMat)){
       verbose = verbose
     )
   } else {
-    use_sandwich = NULL
+    use_sandwich <- NULL
     cat("Skip estimating variance ratios\n")
   }
   closeGenoFile_plink()
   # clean up saved model (as in ReadModel)
   if (isShrinkModelOutput) {
     load(modelOut)
-    modglmm$use_sandwich = use_sandwich
-    modglmm$useGRMtoFitNULL = useGRMtoFitNULL  # step 2 uses this to decide whether closed-form GxE conditioning applies
+    modglmm$use_sandwich <- use_sandwich
+    modglmm$useGRMtoFitNULL <- useGRMtoFitNULL # step 2 uses this to decide whether closed-form GxE conditioning applies
     modglmm$Y <- NULL
     modglmm$linear.predictors <- NULL
     modglmm$coefficients <- NULL
@@ -1643,8 +1646,8 @@ if(is.null(eMat)){
       }
     }
   } else {
-    modglmm$use_sandwich = use_sandwich
-    modglmm$useGRMtoFitNULL = useGRMtoFitNULL
+    modglmm$use_sandwich <- use_sandwich
+    modglmm$useGRMtoFitNULL <- useGRMtoFitNULL
   }
   save(modglmm, file = modelOut)
 
@@ -1652,7 +1655,6 @@ if(is.null(eMat)){
   .report_mem("after Variance ratio estimation")
   cat(sprintf("[TIMING] ===== Total fitNULLGLMM_multiV: %.1fs =====\n", (proc.time() - .t0_total)[3]))
 }
-
 
 
 extractVarianceRatio_multiV <- function(obj.glmm.null,
@@ -1740,21 +1742,32 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   ## their own Case 2 / 3) if preconditions don't hold.
   smw_cached <- FALSE
   if (!is.null(obj.glmm.null$eMat) && length(tauVecNew) >= 3 && tauVecNew[3] != 0) {
-    .vr_N <- nrow(obj.glmm.null$eMat); .vr_k <- ncol(obj.glmm.null$eMat)
+    .vr_N <- nrow(obj.glmm.null$eMat)
+    .vr_k <- ncol(obj.glmm.null$eMat)
     .vr_D <- length(unique(obj.glmm.null$sampleID))
     .vr_estMB <- 4 * (.vr_N * (2 + 2 * .vr_k) + .vr_D * .vr_k^2) / (1024 * 1024)
-    .vr_over  <- !is.null(smwCacheMemLimitMB) && .vr_estMB > smwCacheMemLimitMB
-    cat(sprintf("[SMW] variance-ratio: estimated cache size = %.0f MB (N=%d, k=%d, D=%d)%s\n",
-                .vr_estMB, .vr_N, .vr_k, .vr_D,
-                if (.vr_over) sprintf(" -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
-                                      smwCacheMemLimitMB) else ""))
+    .vr_over <- !is.null(smwCacheMemLimitMB) && .vr_estMB > smwCacheMemLimitMB
+    cat(sprintf(
+      "[SMW] variance-ratio: estimated cache size = %.0f MB (N=%d, k=%d, D=%d)%s\n",
+      .vr_estMB, .vr_N, .vr_k, .vr_D,
+      if (.vr_over) {
+        sprintf(
+          " -> EXCEEDS smwCacheMemLimitMB=%.0f, skipping",
+          smwCacheMemLimitMB
+        )
+      } else {
+        ""
+      }
+    ))
     if (!.vr_over) {
       smw_cached <- isTRUE(prepareSigmaInvSMW_multiV(W, tauVecNew))
     }
   }
   on.exit(if (smw_cached) clearSigmaInvSMWcache(), add = TRUE)
-  cat(sprintf("SMW cache for variance-ratio Sigma^-1 calls: %s\n",
-              if (smw_cached) "ENABLED" else "disabled (falling back to getSigma_X/G_multiV)"))
+  cat(sprintf(
+    "SMW cache for variance-ratio Sigma^-1 calls: %s\n",
+    if (smw_cached) "ENABLED" else "disabled (falling back to getSigma_X/G_multiV)"
+  ))
 
   Sigma_iX_noLOCO <- if (smw_cached) {
     applySigmaInvSMW_multiV_mat(X)
@@ -1765,8 +1778,8 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   ## Hoist the constant pieces of the var1 / var1GE / I_21 quadratic form
   ## (X and Sigma_iX_noLOCO don't change across markers or eMat columns) so
   ## solve(t(X) %*% Sigma_iX) is computed once instead of per iteration.
-  XtSigma_iX     <- t(X) %*% Sigma_iX_noLOCO   # p x p
-  XtSigma_iX_inv <- solve(XtSigma_iX)          # p x p
+  XtSigma_iX <- t(X) %*% Sigma_iX_noLOCO # p x p
+  XtSigma_iX_inv <- solve(XtSigma_iX) # p x p
 
   y <- obj.glmm.null$y
 
@@ -1863,7 +1876,6 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
   } # if(!isCateVarianceRatio){
 
 
-
   b <- as.numeric(factor(obj.glmm.null$sampleID, levels = unique(obj.glmm.null$sampleID)))
   I_mat <- Matrix::sparseMatrix(i = 1:length(b), j = b, x = rep(1, length(b)))
   I_mat <- 1.0 * I_mat
@@ -1900,20 +1912,20 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
       ## accepted markers; trim before summarizing. Avoids quadratic c()/rbind
       ## growth across the marker loop.
       N_max <- length(listOfMarkersForVarRatio[[k]])
-      varRatio_sparseGRM_vec   <- numeric(N_max)
-      varRatio_NULL_vec        <- numeric(N_max)
+      varRatio_sparseGRM_vec <- numeric(N_max)
+      varRatio_NULL_vec <- numeric(N_max)
       varRatio_NULL_sample_vec <- numeric(N_max)
       varRatio_NULL_noXadj_vec <- numeric(N_max)
       n_acc <- 0L
 
       if (!is.null(obj.glmm.null$eMat)) {
         nE <- ncol(obj.glmm.null$eMat)
-        varRatio_NULL_eg_mat     <- matrix(0, nrow = N_max, ncol = nE)
-        varRatio_NULL_eg_vec     <- NULL
-        varRatio_sparse_eg_mat   <- matrix(0, nrow = N_max, ncol = nE)
-        varRatio_sparse_eg_vec   <- NULL
-        varModel_egcondg_mat     <- matrix(0, nrow = N_max, ncol = nE)
-        varSW_egcondg_mat        <- matrix(0, nrow = N_max, ncol = nE)
+        varRatio_NULL_eg_mat <- matrix(0, nrow = N_max, ncol = nE)
+        varRatio_NULL_eg_vec <- NULL
+        varRatio_sparse_eg_mat <- matrix(0, nrow = N_max, ncol = nE)
+        varRatio_sparse_eg_vec <- NULL
+        varModel_egcondg_mat <- matrix(0, nrow = N_max, ncol = nE)
+        varSW_egcondg_mat <- matrix(0, nrow = N_max, ncol = nE)
         varSWtoModel_egcondg_mat <- NULL
       }
 
@@ -1922,12 +1934,12 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
       ratioCV <- ratioCVcutoff + 0.1
 
       ## Per-category timing accumulators (seconds). Printed at end of category.
-      tcat_loop   <- 0  # total wall time of the marker loop body
-      tcat_geno   <- 0  # Get_OneSNP_Geno reads
-      tcat_sig_G  <- 0  # Sigma^-1 G  (one call per accepted marker)
-      tcat_ctx    <- 0  # entire per-marker context for(ne) loop
-      tcat_sig_GE <- 0  # Sigma^-1 GE_tilde (one call per context per marker), summed
-      tcat_t0     <- Sys.time()
+      tcat_loop <- 0 # total wall time of the marker loop body
+      tcat_geno <- 0 # Get_OneSNP_Geno reads
+      tcat_sig_G <- 0 # Sigma^-1 G  (one call per accepted marker)
+      tcat_ctx <- 0 # entire per-marker context for(ne) loop
+      tcat_sig_GE <- 0 # Sigma^-1 GE_tilde (one call per context per marker), summed
+      tcat_t0 <- Sys.time()
 
       while (ratioCV > ratioCVcutoff) {
         while (numTestedMarker < numMarkers0) {
@@ -1961,7 +1973,7 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
           indexInMarkerList <- indexInMarkerList + 1
           if ((CHR >= 1 & CHR <= 22 & AC > 0 & AC < length(G0)) | includeNonautoMarkersforVarRatio) {
             AF <- AC / (2 * Nnomissing)
-            n_acc <- n_acc + 1L   # row index into preallocated accumulators
+            n_acc <- n_acc + 1L # row index into preallocated accumulators
             if (CHR >= 1 & CHR <= 22) {
               autoMarker <- TRUE
             } else {
@@ -2008,15 +2020,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             ## Reorder so every intermediate is length-p (avoids the 1 x n
             ## vector that the chained '%*%' form produces).  XtSigma_iX_inv
             ## is hoisted to function scope above the marker loop.
-            GtSig_iG  <- as.numeric(crossprod(G, Sigma_iG))
-            GtSig_iX  <- as.vector(crossprod(G, Sigma_iX))     # length p
-            tX_Sig_iG <- as.vector(crossprod(X, Sigma_iG))     # length p (reused below for I_21)
-            var1      <- as.numeric(GtSig_iG - GtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
+            GtSig_iG <- as.numeric(crossprod(G, Sigma_iG))
+            GtSig_iX <- as.vector(crossprod(G, Sigma_iX)) # length p
+            tX_Sig_iG <- as.vector(crossprod(X, Sigma_iG)) # length p (reused below for I_21)
+            var1 <- as.numeric(GtSig_iG - GtSig_iX %*% XtSigma_iX_inv %*% tX_Sig_iG)
             S <- innerProduct(G, obj.glmm.null$residuals * var_weights)
             p_exact <- pchisq(S^2 / var1, df = 1, lower.tail = F)
             cat("AC ", AC, "  S ", S, "  p_exact ", p_exact, "\n")
             # res_sample = as.vector(obj.glmm.null$residuals %*% I_mat)
-
 
 
             if (!is.null(obj.glmm.null$eMat)) {
@@ -2024,25 +2035,25 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
               ## once, then derive var1GE / I_21 / sandwich quantities via vector
               ## and matrix ops.  Mathematically equivalent to the prior per-ne loop;
               ## collapses nE small R-level matmuls and Sigma^-1 calls into one each.
-              getilde_sample0_Mat <- NULL  # preserved for count_nb branch compatibility
-              n_donors    <- ncol(I_mat)
+              getilde_sample0_Mat <- NULL # preserved for count_nb branch compatibility
+              n_donors <- ncol(I_mat)
               ## Coerce to plain length-N vectors: obj.glmm.null$residuals can be
               ## stored as an N x 1 matrix, which would broadcast incompatibly
               ## against GE_tilde_mat (N x nE) when nE > 1.
               residWeight <- as.numeric(obj.glmm.null$residuals) * as.numeric(var_weights)
-              S_cell      <- as.numeric(G) * residWeight
-              S_donor     <- as.numeric(t(I_mat) %*% S_cell)
+              S_cell <- as.numeric(G) * residWeight
+              S_donor <- as.numeric(t(I_mat) %*% S_cell)
               .tctx0 <- Sys.time()
 
               eMat_loc <- obj.glmm.null$eMat
-              nE       <- ncol(eMat_loc)
+              nE <- ncol(eMat_loc)
 
               ## GE_mat: column ne is G0 * eMat[,ne].  R recycles G0 (length N) down columns.
-              GE_mat       <- eMat_loc * as.numeric(G0)
+              GE_mat <- eMat_loc * as.numeric(G0)
               ## One projection matmul replaces nE scalar projections.
               GE_tilde_mat <- GE_mat - obj.noK$XXVX_inv %*% (obj.noK$XV %*% GE_mat)
-              rm(GE_mat)   # consumed; release N x nE
-              getildeMat   <- GE_tilde_mat   # used outside the loop for var2nullGE
+              rm(GE_mat) # consumed; release N x nE
+              getildeMat <- GE_tilde_mat # used outside the loop for var2nullGE
 
               ## One batched Sigma^-1 call when SMW cache is available; otherwise
               ## fall back to per-column getSigma_G_multiV (no batched C++ API).
@@ -2053,60 +2064,66 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                 Sigma_iGE_mat <- matrix(0, nrow = nrow(GE_tilde_mat), ncol = nE)
                 for (ne in seq_len(nE)) {
                   Sigma_iGE_mat[, ne] <- getSigma_G_multiV(
-                    W, tauVecNew, GE_tilde_mat[, ne], maxiterPCG, tolPCG, LOCO = FALSE)
+                    W, tauVecNew, GE_tilde_mat[, ne], maxiterPCG, tolPCG,
+                    LOCO = FALSE
+                  )
                 }
               }
               tcat_sig_GE <- tcat_sig_GE + as.numeric(difftime(Sys.time(), .tsge0, units = "secs"))
 
               ## Quadratic forms — all length-nE vectors / nE x p matrices.
-              GEtSig_iGE_vec <- colSums(GE_tilde_mat * Sigma_iGE_mat)              # nE
-              GEtSig_iX_mat  <- crossprod(GE_tilde_mat, Sigma_iX)                  # nE x p
-              tX_Sig_iGE_mat <- crossprod(X, Sigma_iGE_mat)                        # p x nE
-              rm(Sigma_iGE_mat)  # consumed; release N x nE
-              GEtSig_iX_Ainv <- GEtSig_iX_mat %*% XtSigma_iX_inv                   # nE x p
+              GEtSig_iGE_vec <- colSums(GE_tilde_mat * Sigma_iGE_mat) # nE
+              GEtSig_iX_mat <- crossprod(GE_tilde_mat, Sigma_iX) # nE x p
+              tX_Sig_iGE_mat <- crossprod(X, Sigma_iGE_mat) # p x nE
+              rm(Sigma_iGE_mat) # consumed; release N x nE
+              GEtSig_iX_Ainv <- GEtSig_iX_mat %*% XtSigma_iX_inv # nE x p
               ## var1GE[ne] = GEtSig_iGE[ne] - GEtSig_iX[ne,] %*% A^-1 %*% tX_Sig_iGE[,ne]
-              var1GE_vec     <- as.numeric(GEtSig_iGE_vec -
-                                           rowSums(GEtSig_iX_Ainv * t(tX_Sig_iGE_mat)))
+              var1GE_vec <- as.numeric(GEtSig_iGE_vec -
+                rowSums(GEtSig_iX_Ainv * t(tX_Sig_iGE_mat)))
 
               ## I_21[ne] = GEtSig_iG[ne] - GEtSig_iX[ne,] %*% A^-1 %*% tX_Sig_iG (constant)
-              GEtSig_iG_vec  <- as.vector(crossprod(GE_tilde_mat, Sigma_iG))       # nE
-              I_21_vec       <- as.numeric(GEtSig_iG_vec -
-                                           GEtSig_iX_Ainv %*% tX_Sig_iG)
+              GEtSig_iG_vec <- as.vector(crossprod(GE_tilde_mat, Sigma_iG)) # nE
+              I_21_vec <- as.numeric(GEtSig_iG_vec -
+                GEtSig_iX_Ainv %*% tX_Sig_iG)
 
-              I_11               <- var1
-              c_coeff_vec        <- I_21_vec / I_11
+              I_11 <- var1
+              c_coeff_vec <- I_21_vec / I_11
               varModelGEcond_vec <- var1GE_vec - I_21_vec^2 / I_11
 
               ## Donor sandwich (HC1) — column-broadcast residual weights, then per-donor
               ## contributions, then centered sum-of-squares per context.
-              S_GE_cell_mat <- GE_tilde_mat * residWeight                          # N x nE
-              R_donor_mat   <- as.matrix(t(I_mat) %*% S_GE_cell_mat)               # D x nE
-              rm(S_GE_cell_mat)  # consumed; release N x nE
-              Q_donor_mat   <- R_donor_mat - outer(S_donor, c_coeff_vec)           # D x nE
-              T_cond_vec    <- colSums(Q_donor_mat)                                # nE
-              Q_bar_vec     <- T_cond_vec / n_donors
-              centered_mat  <- sweep(Q_donor_mat, 2, Q_bar_vec, `-`)
+              S_GE_cell_mat <- GE_tilde_mat * residWeight # N x nE
+              R_donor_mat <- as.matrix(t(I_mat) %*% S_GE_cell_mat) # D x nE
+              rm(S_GE_cell_mat) # consumed; release N x nE
+              Q_donor_mat <- R_donor_mat - outer(S_donor, c_coeff_vec) # D x nE
+              T_cond_vec <- colSums(Q_donor_mat) # nE
+              Q_bar_vec <- T_cond_vec / n_donors
+              centered_mat <- sweep(Q_donor_mat, 2, Q_bar_vec, `-`)
               varSWGEcond_vec <- colSums(centered_mat^2) * n_donors /
-                                 (n_donors - ncol(Sigma_iX))
-              rm(centered_mat, Q_donor_mat, R_donor_mat)  # D x nE each
+                (n_donors - ncol(Sigma_iX))
+              rm(centered_mat, Q_donor_mat, R_donor_mat) # D x nE each
 
               ## Sparse-GRM variance ratio (per-context: no batched C++ API).
               if (useSparseGRMforVarRatio) {
                 set_isSparseGRM(useSparseGRMforVarRatio)
                 var2sparseGE_vec <- numeric(nE)
                 for (ne in seq_len(nE)) {
-                  GEt_ne           <- GE_tilde_mat[, ne]
+                  GEt_ne <- GE_tilde_mat[, ne]
                   Sigma_iGE_sparse <- getSigma_G_noV(W, tauVecNew, GEt_ne,
-                                                    maxiterPCG, tolPCG, LOCO = FALSE)
+                    maxiterPCG, tolPCG,
+                    LOCO = FALSE
+                  )
                   var2sparseGE_vec[ne] <- as.numeric(crossprod(GEt_ne, Sigma_iGE_sparse))
                 }
               } else if (any(duplicated(obj.glmm.null$sampleID))) {
                 tauVal <- if (useGRMtoFitNULL) tauVecNew[3] else tauVecNew[2]
                 var2sparseGE_vec <- numeric(nE)
                 for (ne in seq_len(nE)) {
-                  GEt_ne           <- GE_tilde_mat[, ne]
-                  Sigma_iGE_sparse <- getSigma_G_V(W, tauVal, tauVecNew[1], GEt_ne,
-                                                  maxiterPCG, tolPCG)
+                  GEt_ne <- GE_tilde_mat[, ne]
+                  Sigma_iGE_sparse <- getSigma_G_V(
+                    W, tauVal, tauVecNew[1], GEt_ne,
+                    maxiterPCG, tolPCG
+                  )
                   var2sparseGE_vec[ne] <- as.numeric(crossprod(GEt_ne, Sigma_iGE_sparse))
                 }
               } else {
@@ -2203,7 +2220,7 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
                   # GE_sample_tilde = getilde_sample0_Mat[,ne]
                   # cat("mean(GE_sample_tilde) ", mean(GE_sample_tilde), "\n")
                   var22nullGE <- innerProduct(mu * var_weights, GE_tilde * GE_tilde)
-                  #var22nullGE = innerProduct(as.vector(t(mu*var_weights) %*% I_mat), as.vector(GE_sample_tilde*GE_sample_tilde))
+                  # var22nullGE = innerProduct(as.vector(t(mu*var_weights) %*% I_mat), as.vector(GE_sample_tilde*GE_sample_tilde))
                   var2nullGE_vec <- c(var2nullGE_vec, var22nullGE)
                 }
               }
@@ -2226,14 +2243,14 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
             cat("AC ", AC, "  var1 ", var1, "  var2null ", var2null, "\n")
             # cat("p_approx ", p_approx, "\n")
             # cat("p_approx_true ", p_approx_true, "\n")
-            varRatio_NULL_vec[n_acc]        <- var1 / var2null
+            varRatio_NULL_vec[n_acc] <- var1 / var2null
             varRatio_NULL_sample_vec[n_acc] <- var1 / var2null_sample
             varRatio_NULL_noXadj_vec[n_acc] <- var1 / var2null_noXadj
             if (!is.null(obj.glmm.null$eMat)) {
-              varRatio_NULL_eg_mat[n_acc, ]   <- var1GE_vec / var2nullGE_vec
+              varRatio_NULL_eg_mat[n_acc, ] <- var1GE_vec / var2nullGE_vec
               varRatio_sparse_eg_mat[n_acc, ] <- var1GE_vec / var2sparseGE_vec
-              varModel_egcondg_mat[n_acc, ]   <- varModelGEcond_vec
-              varSW_egcondg_mat[n_acc, ]      <- varSWGEcond_vec
+              varModel_egcondg_mat[n_acc, ] <- varModelGEcond_vec
+              varSW_egcondg_mat[n_acc, ] <- varSWGEcond_vec
             }
             # indexInMarkerList = indexInMarkerList + 1
             numTestedMarker <- numTestedMarker + 1
@@ -2267,7 +2284,7 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
       if (verbose) {
         tcat_loop <- as.numeric(difftime(Sys.time(), tcat_t0, units = "secs"))
-        .nE_eff   <- if (!is.null(obj.glmm.null$eMat)) ncol(obj.glmm.null$eMat) else 0L
+        .nE_eff <- if (!is.null(obj.glmm.null$eMat)) ncol(obj.glmm.null$eMat) else 0L
         cat(sprintf(
           "[TIMING:VR] cat=%d markers=%d nE=%d  total=%.2fs  geno=%.2fs  sigma_G=%.2fs  ctx_loop=%.2fs  sigma_GE_sum=%.2fs  other=%.2fs\n",
           k, n_acc, .nE_eff,
@@ -2278,9 +2295,9 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
           cat(sprintf(
             "[TIMING:VR] cat=%d per-marker:  geno=%.4fs  sigma_G=%.4fs  ctx_loop=%.4fs  sigma_GE_per_ctx=%.4fs\n",
             k,
-            tcat_geno   / n_acc,
-            tcat_sig_G  / n_acc,
-            tcat_ctx    / n_acc,
+            tcat_geno / n_acc,
+            tcat_sig_G / n_acc,
+            tcat_ctx / n_acc,
             if (.nE_eff > 0) tcat_sig_GE / (n_acc * .nE_eff) else 0
           ))
         }
@@ -2288,15 +2305,15 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
 
       ## Trim preallocated accumulators to the n_acc actually-used rows before
       ## summarizing so mean()/colMeans() see only real values, not the zero-padded tail.
-      varRatio_sparseGRM_vec   <- varRatio_sparseGRM_vec[seq_len(n_acc)]
-      varRatio_NULL_vec        <- varRatio_NULL_vec[seq_len(n_acc)]
+      varRatio_sparseGRM_vec <- varRatio_sparseGRM_vec[seq_len(n_acc)]
+      varRatio_NULL_vec <- varRatio_NULL_vec[seq_len(n_acc)]
       varRatio_NULL_sample_vec <- varRatio_NULL_sample_vec[seq_len(n_acc)]
       varRatio_NULL_noXadj_vec <- varRatio_NULL_noXadj_vec[seq_len(n_acc)]
       if (!is.null(obj.glmm.null$eMat)) {
-        varRatio_NULL_eg_mat   <- varRatio_NULL_eg_mat[seq_len(n_acc), , drop = FALSE]
+        varRatio_NULL_eg_mat <- varRatio_NULL_eg_mat[seq_len(n_acc), , drop = FALSE]
         varRatio_sparse_eg_mat <- varRatio_sparse_eg_mat[seq_len(n_acc), , drop = FALSE]
-        varModel_egcondg_mat   <- varModel_egcondg_mat[seq_len(n_acc), , drop = FALSE]
-        varSW_egcondg_mat      <- varSW_egcondg_mat[seq_len(n_acc), , drop = FALSE]
+        varModel_egcondg_mat <- varModel_egcondg_mat[seq_len(n_acc), , drop = FALSE]
+        varSW_egcondg_mat <- varSW_egcondg_mat[seq_len(n_acc), , drop = FALSE]
       }
 
       if (n_acc > 0) {
@@ -2338,27 +2355,27 @@ extractVarianceRatio_multiV <- function(obj.glmm.null,
     }
   } # for(k in 1:length(listOfMarkersForVarRatio)){
   write.table(varRatioTable, varRatioOutFile, quote = F, col.names = F, row.names = F)
-  
+
   # Non-dynamic analyses do not have eMat and therefore do not use sandwich
   # variances. Initialize the return value so that path is valid as well.
   use_sandwich <- NULL
   if (!is.null(obj.glmm.null$eMat)) {
-    #write.table(varModel_egcondg_mat, paste0(varRatioOutFile, ".varModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
-    #write.table(varSW_egcondg_mat, paste0(varRatioOutFile, ".varSW_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
-    varSWtoModel_egcondg_mat = varSW_egcondg_mat/varModel_egcondg_mat
-    #write.table(varSWtoModel_egcondg_mat, paste0(varRatioOutFile, ".varSWtoModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
-    ##threshold
-    threshold = 1 + 2 * sqrt(2 / n_donors)
-    median_ratios = apply(varSWtoModel_egcondg_mat, 2, median, na.rm = TRUE)
+    # write.table(varModel_egcondg_mat, paste0(varRatioOutFile, ".varModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    # write.table(varSW_egcondg_mat, paste0(varRatioOutFile, ".varSW_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    varSWtoModel_egcondg_mat <- varSW_egcondg_mat / varModel_egcondg_mat
+    # write.table(varSWtoModel_egcondg_mat, paste0(varRatioOutFile, ".varSWtoModel_egcondg_mat.txt"),quote = F, col.names = F, row.names = F)
+    ## threshold
+    threshold <- 1 + 2 * sqrt(2 / n_donors)
+    median_ratios <- apply(varSWtoModel_egcondg_mat, 2, median, na.rm = TRUE)
     cat("threshold for using sandwich variance:", threshold, "\n")
     cat("median sandwich/model variance ratios per context:\n")
     print(median_ratios)
-    use_sandwich = median_ratios > threshold
-    #for donor level context, do not use sandwich variance
-    use_sandwich[obj.glmm.null$eMatIsSample] = FALSE
+    use_sandwich <- median_ratios > threshold
+    # for donor level context, do not use sandwich variance
+    use_sandwich[obj.glmm.null$eMatIsSample] <- FALSE
     cat("use_sandwich per context:\n")
     print(use_sandwich)
-}
+  }
 
   data <- read.table(varRatioOutFile, header = F)
   print(data)
@@ -2770,7 +2787,7 @@ glmmkin.ai_PCG_Rcpp_multiV <- function(bedFile, bimFile, famFile, Xorig, isCovar
 
         mu2_rescaled <- mu2 * var_weights
         mu_rescaled <- mu * var_weights
-	
+
         if (!isCovariateOffset) {
           obj.noK <- ScoreTest_NULL_Model(mu_rescaled, mu2_rescaled, y_rescaled, X)
         } else {
@@ -2789,8 +2806,6 @@ glmmkin.ai_PCG_Rcpp_multiV <- function(bedFile, bimFile, famFile, Xorig, isCovar
   }
   return(glmmResult)
 }
-
-
 
 
 # Fits the null glmm
@@ -2953,9 +2968,9 @@ glmmkin.ai_PCG_Rcpp_multiV_eMat <- function(bedFile, bimFile, famFile, Xorig, is
   # }
 
 
-   #if(isStoreSigma){
-   #  gen_sp_Sigma_multiV(W, tau)
-   #}
+  # if(isStoreSigma){
+  #  gen_sp_Sigma_multiV(W, tau)
+  # }
 
   if (isSparseGRMIdentity) {
     tau[2] <- 0
@@ -3004,8 +3019,6 @@ glmmkin.ai_PCG_Rcpp_multiV_eMat <- function(bedFile, bimFile, famFile, Xorig, is
     cat("tau0_v1: ", tau0, "\n")
     eta0 <- eta
   }
-
-
 
 
   for (i in seq_len(maxiter_in)) {

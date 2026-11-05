@@ -129,10 +129,10 @@ SPAGMMATtest <- function(bgenFile = "",
                          is_noadjCov = TRUE,
                          is_sparseGRM = TRUE,
                          max_MAC_use_ER = 4,
-                         is_EmpSPA = FALSE, 
-			 is_permute_e = FALSE,
-			 is_permute_ginge = FALSE,
-			 permute_ginge_fam_file = "") {
+                         is_EmpSPA = FALSE,
+                         is_permute_e = FALSE,
+                         is_permute_ginge = FALSE,
+                         permute_ginge_fam_file = "") {
   # cat("r.corr is ", r.corr, "\n")
   if (!(impute_method %in% c("best_guess", "mean", "minor"))) {
     stop("impute_method should be 'best_guess', 'mean' or 'minor'.")
@@ -226,7 +226,6 @@ SPAGMMATtest <- function(bgenFile = "",
       minMAC_in_groupTest_Exclude = minMAC_in_groupTest_Exclude,
       markers_per_chunk_in_groupTest = markers_per_chunk_in_groupTest
     )
-
 
 
     # if(file.exists(SAIGEOutputFile)) {print("ok -1 file exist")}
@@ -399,8 +398,6 @@ SPAGMMATtest <- function(bgenFile = "",
   }
 
 
-
-
   # print("sum(!duplicated(obj.model$X))")
   # print(sum(!duplicated(obj.model$X)))
   # print("length(unique(obj.model$sampleID))")
@@ -416,11 +413,11 @@ SPAGMMATtest <- function(bgenFile = "",
     # eMat = cbind(eMat, t(I_mat)%*%(obj.model.List[[oml]]$eMat))
     eMat <- cbind(eMat, (obj.model.List[[oml]]$eMat))
     isgxe_vec <- c(isgxe_vec, obj.model.List[[oml]]$isgxe)
-    if(!is.null(obj.model.List[[1]]$use_sandwich)){
-     isUseSandwichVarianceMat_gxe = rbind(isUseSandwichVarianceMat_gxe, as.integer(obj.model.List[[oml]]$use_sandwich))
-    }else{
-     use_sandwichvec = rep(0, ncol(obj.model.List[[1]]$eMat))
-     isUseSandwichVarianceMat_gxe = rbind(isUseSandwichVarianceMat_gxe, use_sandwichvec)
+    if (!is.null(obj.model.List[[1]]$use_sandwich)) {
+      isUseSandwichVarianceMat_gxe <- rbind(isUseSandwichVarianceMat_gxe, as.integer(obj.model.List[[oml]]$use_sandwich))
+    } else {
+      use_sandwichvec <- rep(0, ncol(obj.model.List[[1]]$eMat))
+      isUseSandwichVarianceMat_gxe <- rbind(isUseSandwichVarianceMat_gxe, use_sandwichvec)
     }
   }
 
@@ -446,8 +443,8 @@ SPAGMMATtest <- function(bgenFile = "",
   mu_gxe <- NULL
 
   varWeights_gxe <- NULL
-  X_cell_gxe <- NULL  # cell-level design for model-based GxE conditioning, traits stacked by rows
-  W_gxe <- NULL       # null-model working weights for model-based GxE conditioning
+  X_cell_gxe <- NULL # cell-level design for model-based GxE conditioning, traits stacked by rows
+  W_gxe <- NULL # null-model working weights for model-based GxE conditioning
 
   ## Set up the sample level summary statistics. This is specifically for data sets with repeated measurements
   if (sum(duplicated(obj.model.List[[1]]$sampleID)) > 0) {
@@ -742,7 +739,6 @@ SPAGMMATtest <- function(bgenFile = "",
     # }
 
 
-
     # print("setSAIGEobjInCPP 0")
     # print_g_n_unique()
 
@@ -899,42 +895,42 @@ SPAGMMATtest <- function(bgenFile = "",
       stop("ERROR! Permutation FAM file ", permute_ginge_fam_file, " does not exist\n")
     }
     cat("Using permutation order from FAM file:", permute_ginge_fam_file, "\n")
-    
+
     # Read permutation FAM file to get sample order
     permute_fam <- read.table(permute_ginge_fam_file, header = FALSE, stringsAsFactors = FALSE)
-    permute_sample_ids <- permute_fam[, 2]  # IID is in column 2
-    
+    permute_sample_ids <- permute_fam[, 2] # IID is in column 2
+
     # Get current sample IDs from the first model (assuming all models have same samples)
     current_sample_ids <- obj.model.List[[1]]$sampleID
-    
+
     # Get unique individual IDs (corresponding to genotype samples)
     unique_individual_ids <- unique(current_sample_ids)
-    
+
     # Filter permuted FAM to only include individuals in current analysis
     common_individuals_mask <- permute_sample_ids %in% unique_individual_ids
     filtered_permute_individuals <- permute_sample_ids[common_individuals_mask]
-    
+
     # Check we have all current individuals
     if (length(filtered_permute_individuals) != length(unique_individual_ids)) {
       missing_count <- length(unique_individual_ids) - length(filtered_permute_individuals)
       stop("ERROR! ", missing_count, " individuals in current analysis not found in permutation FAM file\n")
     }
-    
+
     # Build permutation indices at individual level
     permute_indices <- match(filtered_permute_individuals, unique_individual_ids)
-    
+
     if (any(is.na(permute_indices))) {
       stop("ERROR! Failed to build valid permutation indices\n")
     }
-    
+
     # Convert to 0-based indices for C++
     permute_indices_0based <- as.integer(permute_indices - 1)
-    
+
     # Set permutation indices in C++
     set_permute_ginge_indices_direct(permute_indices_0based)
   }
 
-  setAssocTest_GlobalVarsInCPP_GbyE(eMat, isgxe_vec[1], isUseSandwichVarianceMat_gxe, as.numeric(pval_cutoff_for_gxe), XV_gxe, XXVX_inv_gxe, y_gxe, res_gxe, mu2_gxe, mu_gxe, varWeights_gxe,is_permute_e,is_permute_ginge)
+  setAssocTest_GlobalVarsInCPP_GbyE(eMat, isgxe_vec[1], isUseSandwichVarianceMat_gxe, as.numeric(pval_cutoff_for_gxe), XV_gxe, XXVX_inv_gxe, y_gxe, res_gxe, mu2_gxe, mu_gxe, varWeights_gxe, is_permute_e, is_permute_ginge)
 
   ## Conditioning of the GxE score on the marginal G score
   if (isgxe_vec[1]) {
@@ -944,10 +940,10 @@ SPAGMMATtest <- function(bgenFile = "",
     if (!(gxe_modelcond_engine %in% c("donor", "cell"))) {
       stop("ERROR! gxe_modelcond_engine must be 'donor' or 'cell'\n")
     }
-	if (gxe_modelcond_engine == "donor" && (isTRUE(is_permute_e) || isTRUE(is_permute_ginge))) {
-	  cat("NOTE: permutation mode uses the validation cell engine for exact GxE conditioning\n")
-	  gxe_modelcond_engine <- "cell"
-	}
+    if (gxe_modelcond_engine == "donor" && (isTRUE(is_permute_e) || isTRUE(is_permute_ginge))) {
+      cat("NOTE: permutation mode uses the validation cell engine for exact GxE conditioning\n")
+      gxe_modelcond_engine <- "cell"
+    }
     gxe_modelcond <- FALSE
     if (gxe_conditioning == "model") {
       why_not <- NULL
@@ -1049,7 +1045,6 @@ SPAGMMATtest <- function(bgenFile = "",
     BetaDist_weight_mat <- as.matrix(BetaDist_weight_mat)
     print("BetaDist_weight_mat")
     print(dim(BetaDist_weight_mat))
-
 
 
     assign_conditionMarkers_factors(genoType, condition_genoIndex_prev_a, condition_genoIndex_a, n, condition_weights, BetaDist_weight_mat, is_equal_weight_in_groupTest)

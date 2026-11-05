@@ -102,7 +102,6 @@ createSparseGRM <- function(bedFile = "",
   print(tb - ta)
 
 
-
   cat("length(sparseMList$iIndex): ", length(sparseMList$iIndex), "\n")
   print(sparseMList$iIndex[1:102])
   cat("length(sparseMList$jIndex): ", length(sparseMList$jIndex), "\n")
@@ -126,8 +125,6 @@ createSparseGRM <- function(bedFile = "",
   }
   return(list(sparseGRMSampleID = sparseGRMSampleID, sparseGRM = sparseGRM))
 }
-
-
 
 
 # createSparseKinParallel = function(markerIndexVec, nblocks, ncore, relatednessCutoff, W, tauVecNew){
@@ -170,7 +167,6 @@ createSparseKinParallel <- function(nblocks, ncore, relatednessCutoff) {
   cat("tp2 - tp1: ", tp2 - tp1, "\n")
   return(sparseKinList)
 }
-
 
 
 getSparseSigma <- function(bedFile,

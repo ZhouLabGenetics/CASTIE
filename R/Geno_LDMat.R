@@ -58,7 +58,6 @@ checkGenoInput_LDmat <- function(bgenFile = "",
 }
 
 
-
 setGenoInput_LDmat <- function(bgenFile = "",
                                bgenFileIndex = "",
                                vcfFile = "",

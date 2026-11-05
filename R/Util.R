@@ -11,7 +11,6 @@ checkArgsNumeric <- function(arg0, arg0name, minVal, maxVal) {
 }
 
 
-
 Check_File_Exist <- function(file, filetype) {
   if (!file.exists(file)) {
     stop("ERROR! ", filetype, " ", file, " does not exsit\n")
@@ -65,7 +64,6 @@ updateChrStartEndIndexVec <- function(chrVec) {
   setStartEndIndexVec(chromosomeStartIndexVec_forcpp, chromosomeEndIndexVec_forcpp)
   return(list(LOCO = LOCO, chromosomeStartIndexVec = chromosomeStartIndexVec, chromosomeEndIndexVec = chromosomeEndIndexVec))
 }
-
 
 
 create_resultHeader <- function(traitType,
@@ -293,12 +291,6 @@ create_resultHeader <- function(traitType,
 }
 
 
-
-
-
-
-
-
 # https://www.well.ox.ac.uk/~gav/bgen_format/spec/v1.2.html
 #' Extract sample identifiers from BGEN file (for BGEN v1.2)
 #'
@@ -460,7 +452,6 @@ Check_GenoFile <- function(GenoFile,
     Check_File_Exist(famFile, "famFile")
 
 
-
     if (is.null(AlleleOrder)) {
       AlleleOrder <- "ref-first"
       cat("AlleleOrder is not specified, so bgen will be read as ref-first\n")
@@ -550,7 +541,6 @@ checkOutputFile <- function(OutputFile,
   returnList <- list(Start = Start, End = End, indexChunk = indexChunk)
   return(returnList)
 }
-
 
 
 writeOutputFile <- function(Output,

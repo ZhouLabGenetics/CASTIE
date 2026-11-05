@@ -1,22 +1,23 @@
 SAIGE.Marker <- function(
-    traitType,
-    phenotype_name_vec,
-    genoType,
-    genoIndex_prev,
-    genoIndex,
-    CHROM,
-    OutputFile,
-    OutputFileIndex = NULL,
-    nMarkersEachChunk,
-    isMoreOutput,
-    isImputation,
-    isFirth,
-    LOCO,
-    chrom,
-    isCondition,
-    isOverWriteOutput,
-    isAnyInclude,
-    isGbyE) {
+  traitType,
+  phenotype_name_vec,
+  genoType,
+  genoIndex_prev,
+  genoIndex,
+  CHROM,
+  OutputFile,
+  OutputFileIndex = NULL,
+  nMarkersEachChunk,
+  isMoreOutput,
+  isImputation,
+  isFirth,
+  LOCO,
+  chrom,
+  isCondition,
+  isOverWriteOutput,
+  isAnyInclude,
+  isGbyE
+) {
   if (is.null(OutputFileIndex)) {
     OutputFileIndex <- paste0(OutputFile, ".index")
   }
@@ -36,9 +37,12 @@ SAIGE.Marker <- function(
   # Remove any streams left by an earlier marker test in this R session.
   closeOutfile_single()
   streams_open <- FALSE
-  on.exit({
-    if (streams_open) closeOutfile_single()
-  }, add = TRUE)
+  on.exit(
+    {
+      if (streams_open) closeOutfile_single()
+    },
+    add = TRUE
+  )
   for (itt in 1:length(traitType)) {
     if (length(traitType) > 1) {
       OutputFile_itt <- paste0(OutputFile, "_", phenotype_name_vec[itt])
@@ -201,7 +205,6 @@ SAIGE.Marker <- function(
     print(ptm)
     gc()
     # rm(resMarker)
-
 
 
     i <- i + 1
