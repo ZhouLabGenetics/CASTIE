@@ -9,8 +9,8 @@ Description:an R package that implements the Scalable and Accurate Implementatio
 License: GPL (>= 2)
 Imports: Rcpp (>= 1.0.7), RcppParallel, Matrix, data.table, RcppArmadillo (>= 0.10.7.5), RcppNumerical, hdf5r
 LinkingTo: Rcpp, RcppArmadillo (>= 0.10.7.5), RcppParallel, data.table, SPAtest,
-        RcppEigen, Matrix, methods, BH, optparse, SKAT, MetaSKAT, qlcMatrix, RhpcBLASctl, RSQLite, dplyr, nlme, MASS, RcppEigen, RcppNumerical
-Remotes: cysouw/qlcMatrix, leeshawn/MetaSKAT
+        RcppEigen, Matrix, methods, BH, optparse, SKAT, qlcMatrix, RhpcBLASctl, RSQLite, dplyr, nlme, MASS, RcppEigen, RcppNumerical
+Remotes: cysouw/qlcMatrix
 Depends: R (>= 3.5.0)
 SystemRequirements: GNU make
 RoxygenNote: 7.1.2

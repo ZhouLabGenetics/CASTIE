@@ -64,7 +64,6 @@ r-mass = "*"
 
 # Statistical packages
 r-skat = "*"
-r-metaskat = "*"
 r-spatest = "*"
 bioconductor-qvalue = "*"
 
@@ -78,6 +77,5 @@ r-qlcmatrix = ">=0.9.9,<0.10"
 
 # Note: Some packages not available in conda channels:
 # - qlcMatrix (GitHub: cysouw/qlcMatrix)
-# - MetaSKAT (GitHub: leeshawn/MetaSKAT)
 # - fastSave (GitHub: barkasn/fastSave)
 # These are handled via the install-github-deps task
