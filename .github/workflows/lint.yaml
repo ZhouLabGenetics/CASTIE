@@ -35,19 +35,23 @@ jobs:
           # Install Python packages using pip
           pip3 install cget
 
-          # Install user's private bin path for cget
-          CGET_DIR="$HOME/.local/bin"
-          PROFILE_DIR="$HOME/.profile"
-          # Check if the directory is not already in the profile
-          if ! grep -qF "$CGET_DIR" "$PROFILE_DIR"; then
-            echo "export PATH=\"\$PATH:$CGET_DIR\"" >> "$PROFILE_DIR"
-          fi
-          source $PROFILE_DIR
+          # Make the user-level cget executable available to later steps.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::lintr, any::styler, any::roxygen2, local::.
+          extra-packages: any::lintr, any::styler, any::roxygen2
           needs: lint, styler
+
+      - name: Build bundled C++ dependencies
+        run: |
+          export CFLAGS="-fPIC"
+          export CXXFLAGS="-fPIC"
+          cd thirdParty
+          cget install -f requirements.txt
+
+      - name: Install CASTIE from the checkout
+        run: R CMD INSTALL .
       
       - name: Enable styler cache
         run: styler::cache_activate()
