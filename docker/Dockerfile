@@ -4,6 +4,7 @@ LABEL maintainer="wzhou@broadinstitute.org"
 
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
+ENV TZ=UTC
 ENV OMP_NUM_THREADS=1
 # Force step_2 to use 1 single thread. More threads are ineffective
 ENV PIXI_NO_PATH_UPDATE=1
