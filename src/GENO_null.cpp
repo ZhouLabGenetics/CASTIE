@@ -360,7 +360,7 @@ void NullGenoClass::Get_OneSNP_Geno_atBeginning(size_t SNPIdx, vector<int> & ind
 
 		             altFreq = alleleCount/float(Nnomissing * 2);
 
-             unsigned char geno2;
+             unsigned char geno2 = 0;
              passQC = false;
              passVarRatio = false;
              float maf = std::min(altFreq, 1-altFreq);
